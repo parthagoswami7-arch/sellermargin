@@ -71,10 +71,13 @@ export const FILE_TYPE_LINKS = {
   easyship_returns: {
     label: "Manage Returns (Easy Ship / Self Ship)",
     url: "https://sellercentral.amazon.in/returns/report",
-    help: "Set the date range, click 'Download report' → saves a .tsv file.",
+    help: "Set the date range, click 'Request' → then download the TSV once ready.",
     range: "1.5 months",
     range_hint: "Cover the target month + 2 weeks after to catch late returns.",
-    screenshot: "/help/easyship_returns.png",
+    screenshots: [
+      { src: "/help/easyship_returns/step1.png", caption: "Step 1 — On Return Reports, set the type to 'All Returns' and choose 'Exact dates' from the dropdown." },
+      { src: "/help/easyship_returns/step2.png", caption: "Step 2 — Enter a 1.5-month From→To range (e.g. 06/01/2026 → 07/15/2026), click Request, then click Download under the TSV column once the row appears." },
+    ],
   },
   fba_removal: {
     label: "Reports → Fulfilment → FBA Removal Order Detail",
