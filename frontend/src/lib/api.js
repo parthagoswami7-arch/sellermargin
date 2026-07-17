@@ -82,10 +82,13 @@ export const FILE_TYPE_LINKS = {
   fba_removal: {
     label: "Reports → Fulfilment → FBA Removal Order Detail",
     url: "https://sellercentral.amazon.in/reportcentral/REMOVAL_ORDER_DETAIL/1",
-    help: "Under FBA → 'Removals', request the Removal Order Detail report as CSV.",
+    help: "On Removal Order Detail, request a CSV for the target month and download.",
     range: "1 month",
     range_hint: "Just the target month is enough.",
-    screenshot: "/help/fba_removal.png",
+    screenshots: [
+      { src: "/help/fba_removal/step1.png", caption: "Step 1 — On the Removal Order Detail page, click the 'Download' tab, then under Event Date pick 'Exact dates' from the dropdown." },
+      { src: "/help/fba_removal/step2.png", caption: "Step 2 — Set the From→To range to the target month (e.g. 01/06/2026 → 30/06/2026), click 'Request .csv Download', then click Download once the row appears." },
+    ],
   },
   ad_spend: {
     label: "Ads Console → Reports → Sponsored Products (Campaign)",
