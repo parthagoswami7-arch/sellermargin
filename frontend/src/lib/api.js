@@ -63,7 +63,10 @@ export const FILE_TYPE_LINKS = {
     help: "Under FBA → 'Customer Concessions', request the FBA Customer Returns report as CSV.",
     range: "1.5 months",
     range_hint: "Cover the target month + 2 weeks after (some returns arrive late).",
-    screenshot: "/help/fba_returns.png",
+    screenshots: [
+      { src: "/help/fba_returns/step1.png", caption: "Step 1 — On the FBA Customer Returns page, click the 'Download' tab, then under Event Date pick 'Exact dates' from the dropdown." },
+      { src: "/help/fba_returns/step2.png", caption: "Step 2 — Set a 1.5-month range (e.g. 01/06/2026 → 15/07/2026), click 'Request .csv Download', then click Download once Report Status = Ready." },
+    ],
   },
   easyship_returns: {
     label: "Manage Returns (Easy Ship / Self Ship)",
