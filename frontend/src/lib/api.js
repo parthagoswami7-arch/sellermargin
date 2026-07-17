@@ -12,8 +12,9 @@ export default api;
 
 export const money = (v, currency = "₹") => {
   if (v === null || v === undefined || v === "") return "—";
-  const n = Number(v);
+  let n = Number(v);
   if (Number.isNaN(n)) return "—";
+  if (Object.is(n, -0) || (n > -0.005 && n < 0.005)) n = 0;
   return `${currency} ${n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
