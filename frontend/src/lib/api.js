@@ -52,7 +52,7 @@ export const FILE_TYPE_LINKS = {
   },
   fba_returns: {
     label: "Reports → Fulfilment → FBA Customer Returns",
-    url: "https://sellercentral.amazon.in/gp/ssof/reports/browse-reports.html?ie=UTF8&reportsGroupID=200989440",
+    url: "https://sellercentral.amazon.in/reportcentral/CUSTOMER_RETURNS/0",
     help: "Under FBA → 'Customer Concessions', request the FBA Customer Returns report as CSV.",
     range: "1.5 months",
     range_hint: "Cover the target month + 2 weeks after (some returns arrive late).",
@@ -68,7 +68,7 @@ export const FILE_TYPE_LINKS = {
   },
   fba_removal: {
     label: "Reports → Fulfilment → FBA Removal Order Detail",
-    url: "https://sellercentral.amazon.in/gp/ssof/reports/browse-reports.html?ie=UTF8&reportsGroupID=200989440",
+    url: "https://sellercentral.amazon.in/reportcentral/REMOVAL_ORDER_DETAIL/1",
     help: "Under FBA → 'Removals', request the Removal Order Detail report as CSV.",
     range: "1 month",
     range_hint: "Just the target month is enough.",
