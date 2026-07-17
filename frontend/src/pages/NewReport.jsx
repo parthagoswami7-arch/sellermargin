@@ -1,0 +1,154 @@
+import React, { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import api, { FILE_TYPE_ORDER, FILE_TYPE_LABELS, monthName } from "../lib/api";
+import { Upload, CheckCircle2, X, ArrowRight, FileText } from "lucide-react";
+import { toast } from "sonner";
+
+export default function NewReport() {
+  const nav = useNavigate();
+  const now = new Date();
+  const [month, setMonth] = useState(now.getMonth() + 1);
+  const [year, setYear] = useState(now.getFullYear());
+  const [name, setName] = useState("");
+  const [reportId, setReportId] = useState(null);
+  const [files, setFiles] = useState({}); // ftype → {filename, count}
+  const [uploading, setUploading] = useState(false);
+  const [building, setBuilding] = useState(false);
+
+  const createReport = async () => {
+    try {
+      const r = await api.post("/reports", { name: name || undefined, target_month: Number(month), target_year: Number(year) });
+      setReportId(r.data.report_id);
+      toast.success("Report created — upload your files");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Failed to create report");
+    }
+  };
+
+  const handleFile = async (fileList) => {
+    if (!reportId) { toast.error("Create the report first"); return; }
+    setUploading(true);
+    for (const f of Array.from(fileList)) {
+      const fd = new FormData();
+      fd.append("file", f);
+      try {
+        const res = await api.post(`/reports/${reportId}/upload`, fd, { headers: { "Content-Type": "multipart/form-data" }});
+        setFiles(res.data.files);
+        toast.success(`${f.name} → ${FILE_TYPE_LABELS[res.data.detected_type]} (${res.data.rows} rows)`);
+      } catch (e) {
+        toast.error(`${f.name}: ${e?.response?.data?.detail || "upload failed"}`);
+      }
+    }
+    setUploading(false);
+  };
+
+  const removeFile = async (ftype) => {
+    await api.delete(`/reports/${reportId}/files/${ftype}`);
+    const nf = { ...files }; delete nf[ftype]; setFiles(nf);
+  };
+
+  const build = async () => {
+    setBuilding(true);
+    try {
+      const r = await api.post(`/reports/${reportId}/build`);
+      toast.success(`Built ${r.data.rows_count} rows`);
+      nav(`/report/${reportId}/costs`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Build failed");
+    } finally { setBuilding(false); }
+  };
+
+  const filesUploaded = Object.keys(files).length;
+  const hasOrders = !!files.orders;
+
+  return (
+    <div className="p-10 max-w-[1200px]">
+      <div className="label-caps mb-2">Step 1 of 4</div>
+      <h1 className="font-serif text-5xl tracking-tight mb-2">New reconciliation</h1>
+      <p className="text-muted-foreground mb-10">Set the month, then drop in your six Amazon reports. We auto-detect each file.</p>
+
+      {/* Month/year */}
+      <div className="border border-border bg-card p-8 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          <div>
+            <label className="label-caps block mb-2">Target month</label>
+            <select value={month} onChange={e => setMonth(e.target.value)} disabled={!!reportId}
+              className="w-full border border-border bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50" data-testid="month-select">
+              {Array.from({length:12}, (_,i)=>i+1).map(m => <option key={m} value={m}>{m.toString().padStart(2,"0")} — {monthName(m)}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="label-caps block mb-2">Target year</label>
+            <input type="number" value={year} onChange={e => setYear(e.target.value)} disabled={!!reportId}
+              className="w-full border border-border bg-background px-3 py-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+              data-testid="year-input" />
+          </div>
+          <div className="md:col-span-2">
+            <label className="label-caps block mb-2">Report name (optional)</label>
+            <input type="text" value={name} onChange={e => setName(e.target.value)} disabled={!!reportId}
+              placeholder={`P&L ${String(month).padStart(2,"0")}/${year}`}
+              className="w-full border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
+              data-testid="name-input" />
+          </div>
+        </div>
+        {!reportId && (
+          <button onClick={createReport} className="btn-emerald mt-6" data-testid="create-report-btn">
+            Continue to uploads <ArrowRight size={14} className="inline ml-2" />
+          </button>
+        )}
+      </div>
+
+      {reportId && (
+        <>
+          {/* Dropzone */}
+          <div className="border-2 border-dashed border-border p-12 text-center mb-6 hover:border-primary transition-colors bg-card"
+            onDragOver={(e)=>{e.preventDefault(); e.currentTarget.classList.add("border-primary");}}
+            onDragLeave={(e)=>e.currentTarget.classList.remove("border-primary")}
+            onDrop={(e)=>{e.preventDefault(); e.currentTarget.classList.remove("border-primary"); handleFile(e.dataTransfer.files);}}>
+            <Upload size={32} strokeWidth={1.5} className="mx-auto mb-4 text-primary" />
+            <div className="font-serif text-2xl mb-2">Drop your Amazon reports here</div>
+            <div className="text-sm text-muted-foreground mb-6">.txt, .csv, .tsv — we auto-detect which report is which</div>
+            <label className="btn-emerald cursor-pointer inline-block">
+              {uploading ? "Uploading…" : "Choose files"}
+              <input type="file" multiple onChange={e => handleFile(e.target.files)} className="hidden" accept=".txt,.csv,.tsv" data-testid="file-input" />
+            </label>
+          </div>
+
+          {/* File slots */}
+          <div className="border border-border bg-card">
+            <div className="p-4 border-b border-border label-caps">Required reports ({filesUploaded}/6 detected)</div>
+            {FILE_TYPE_ORDER.map((ft, i) => {
+              const info = files[ft];
+              return (
+                <div key={ft} className={`grid grid-cols-12 px-6 py-4 items-center ${i < 5 ? "border-b border-border" : ""}`}>
+                  <div className="col-span-1">
+                    {info ? <CheckCircle2 size={18} className="text-primary" /> : <div className="w-4 h-4 border border-border rounded-full" />}
+                  </div>
+                  <div className="col-span-5">
+                    <div className="text-sm font-medium">{FILE_TYPE_LABELS[ft]}</div>
+                    {ft === "orders" && <div className="text-xs text-destructive mt-0.5">Required</div>}
+                  </div>
+                  <div className="col-span-4 text-sm text-muted-foreground truncate flex items-center gap-2">
+                    {info ? <><FileText size={12}/> {info.filename} <span className="text-xs">({info.count} rows)</span></> : "—"}
+                  </div>
+                  <div className="col-span-2 text-right">
+                    {info && <button onClick={() => removeFile(ft)} className="text-muted-foreground hover:text-destructive" data-testid={`remove-${ft}`}><X size={14}/></button>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex justify-end mt-8">
+            <button onClick={build} disabled={!hasOrders || building} className="btn-emerald" data-testid="build-btn">
+              {building ? "Building…" : "Next: cost prices"} <ArrowRight size={14} className="inline ml-2" />
+            </button>
+          </div>
+          {!hasOrders && filesUploaded > 0 && (
+            <div className="text-xs text-destructive mt-2 text-right">All Orders report is required to proceed.</div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

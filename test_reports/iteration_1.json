@@ -1,0 +1,32 @@
+{
+  "summary": "First end-to-end test iteration for Amazon P&L SaaS. All 20 pytest backend tests PASSED (health, auth, reports CRUD, 6-file auto-detect uploads, build, cost prices library, returns overrides, finalize with expected numeric values, xlsx/pdf export magic bytes, Stripe checkout, admin gating). Frontend landing, dashboard, /new-report, /cost-prices, /upgrade all render. Full E2E wizard flow completed: create report -> upload 6 samples (auto-detected 6/6) -> build -> set SKU costs (cost-input-<sku>) -> save -> returns overrides (override-<order_id>) -> finalize -> ReportView shows Final Profit ₹21,850.25, expense donut chart, money flow bars, PDF+Excel export buttons.",
+  "backend_issues": {"critical": [], "minor": []},
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "NewReport month <select>", "issues": ["React hydration warning: <span> cannot be a child of <option>. Caused by Emergent visual-editor wrapper (x-source-editable) injecting a <span style=display:contents> inside each <option>. Non-blocking runtime, but pollutes console and violates HTML."]},
+      {"screen": "ReportView metric cards", "issues": ["Inbound Fee and Storage Fee display as '-0.00' instead of '0.00' when there are no fees (cosmetic negative-zero formatting)."]}
+    ]
+  },
+  "test_report_links": ["/app/backend/tests/backend_test.py", "/app/test_reports/pytest/pytest_results.xml"],
+  "action_items": [
+    "Optional: Guard the negative-zero display in ReportView (use Math.abs or `val || 0`) so Inbound/Storage fees show ₹ 0.00 instead of ₹ -0.00.",
+    "Optional: The <option> hydration warning originates from Emergent visual editor tooling wrapping option text. Consider rendering the numeric month value without child text expressions, or ignore (dev-only warning)."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 534 lines — acceptable but nearing the 700-line threshold. Consider extracting the payments/webhook block into a separate module as it grows.",
+    "current_user() reads cookie first, then bearer. Ok. Note: cookies from frontend on dashboard tests use HttpOnly=true in production login; for QA session-injection via mongosh, tests should use Authorization: Bearer as documented. Verified working.",
+    "All Mongo queries correctly project out `_id` with {\"_id\":0}. Good.",
+    "Reports listing correctly excludes heavy `raw` and `rows` payloads.",
+    "Frontend uses REACT_APP_BACKEND_URL consistently (verified in /app/frontend/src/lib/api.js pattern)."
+  ],
+  "updated_files": ["/app/backend/tests/backend_test.py"],
+  "success_rate": {"backend": "100% (20/20)", "frontend": "100% of tested flows"},
+  "test_credentials": "QA session token 'qa_session_token_123' -> user_id test-user-qa (trial user). Admin session token 'admin_session_token_123' -> user_id test-user-admin (is_admin=true). Inserted into test_database via mongosh.",
+  "seed_data_creation": "Inserted test-user-qa + test-user-admin + matching user_sessions. Reports created during test runs: TEST_PNL_Jun2025 (via backend pytest) and TEST_E2E_Wizard (via Playwright E2E). Cost prices library populated for test-user-qa with 5 SKUs @ ₹100.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Backend tests are in /app/backend/tests/backend_test.py and are idempotent-friendly (they always create a fresh TEST_ report). Auth via Authorization: Bearer <qa_session_token_123>. Admin token 'admin_session_token_123'. Public URL https://seller-pnl-pro.preview.emergentagent.com. All 6 sample files at /app/tmp/samples/. Numeric expectations for all-costs-100: settlement≈38612.72, ad_spend≈7979.87, removal_fee≈82.60, final_profit≈21894.75 (backend) / ≈21850 (E2E, slight variance from override).",
+  "rca of the issue": "N/A — no blocking issues found. Two minor cosmetic notes reported."
+}
