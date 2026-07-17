@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { FILE_TYPE_ORDER, FILE_TYPE_LABELS, FILE_TYPE_LINKS, monthName } from "../lib/api";
-import { Upload, CheckCircle2, X, ArrowRight, FileText, ExternalLink, HelpCircle, Calendar, Image as ImageIcon } from "lucide-react";
+import { Upload, CheckCircle2, X, ArrowRight, FileText, ExternalLink, HelpCircle, Calendar, Image as ImageIcon, ChevronDown, ChevronRight } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
 
@@ -15,6 +15,7 @@ export default function NewReport() {
   const [files, setFiles] = useState({}); // ftype → {filename, count}
   const [uploading, setUploading] = useState(false);
   const [building, setBuilding] = useState(false);
+  const [expanded, setExpanded] = useState({}); // ftype → bool
 
   const createReport = async () => {
     try {
@@ -121,89 +122,79 @@ export default function NewReport() {
             {FILE_TYPE_ORDER.map((ft, i) => {
               const info = files[ft];
               const link = FILE_TYPE_LINKS[ft];
+              const hasSteps = link && link.screenshots && link.screenshots.length > 0;
+              const isOpen = !!expanded[ft];
               return (
-                <div key={ft} className={`grid grid-cols-12 px-6 py-4 items-start gap-2 ${i < 5 ? "border-b border-border" : ""}`}>
-                  <div className="col-span-1 pt-1">
-                    {info ? <CheckCircle2 size={18} className="text-primary" /> : <div className="w-4 h-4 border border-border rounded-full" />}
+                <div key={ft} className={i < 5 ? "border-b border-border" : ""}>
+                  <div className="grid grid-cols-12 px-6 py-4 items-start gap-2">
+                    <div className="col-span-1 pt-1">
+                      {info ? <CheckCircle2 size={18} className="text-primary" /> : <div className="w-4 h-4 border border-border rounded-full" />}
+                    </div>
+                    <div className="col-span-5">
+                      <div className="text-sm font-medium">{FILE_TYPE_LABELS[ft]}</div>
+                      {ft === "orders" && <div className="text-xs text-destructive mt-0.5">Required</div>}
+                      {link && (
+                        <div className="mt-2 space-y-1.5">
+                          <a href={link.url} target="_blank" rel="noreferrer"
+                            className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-primary hover:underline"
+                            data-testid={`sc-link-${ft}`} title={link.help}>
+                            <ExternalLink size={11} /> {link.label}
+                          </a>
+                          <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
+                            <Calendar size={11} className="mt-0.5 shrink-0 text-accent"/>
+                            <div>
+                              <span className="font-mono text-foreground">Range: {link.range}</span>
+                              <span className="mx-1.5">·</span>
+                              <span>{link.range_hint}</span>
+                            </div>
+                          </div>
+                          <button onClick={() => setExpanded(e => ({ ...e, [ft]: !e[ft] }))}
+                            className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground"
+                            data-testid={`help-${ft}`}>
+                            {isOpen ? <ChevronDown size={11}/> : <ChevronRight size={11}/>}
+                            {hasSteps ? `${isOpen ? "Hide" : "Show"} ${link.screenshots.length}-step guide` : (isOpen ? "Hide guide" : "Show guide")}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="col-span-4 text-sm text-muted-foreground truncate flex items-center gap-2 pt-1">
+                      {info ? <><FileText size={12}/> <span className="truncate">{info.filename}</span> <span className="text-xs shrink-0">({info.count} rows)</span></> : "—"}
+                    </div>
+                    <div className="col-span-2 text-right pt-1">
+                      {info && <button onClick={() => removeFile(ft)} className="text-muted-foreground hover:text-destructive" data-testid={`remove-${ft}`}><X size={14}/></button>}
+                    </div>
                   </div>
-                  <div className="col-span-5">
-                    <div className="text-sm font-medium">{FILE_TYPE_LABELS[ft]}</div>
-                    {ft === "orders" && <div className="text-xs text-destructive mt-0.5">Required</div>}
-                    {link && (
-                      <div className="mt-2 space-y-1.5">
-                        <a href={link.url} target="_blank" rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-primary hover:underline"
-                          data-testid={`sc-link-${ft}`} title={link.help}>
-                          <ExternalLink size={11} /> {link.label}
-                        </a>
-                        <div className="flex items-start gap-2 text-[11px] text-muted-foreground">
-                          <Calendar size={11} className="mt-0.5 shrink-0 text-accent"/>
-                          <div>
-                            <span className="font-mono text-foreground">Range: {link.range}</span>
-                            <span className="mx-1.5">·</span>
-                            <span>{link.range_hint}</span>
+
+                  {isOpen && (
+                    <div className="px-6 pb-6 pt-0 bg-muted/20 border-t border-border animate-fade-up" data-testid={`guide-${ft}`}>
+                      {hasSteps ? (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-4">
+                          {link.screenshots.map((sh, si) => (
+                            <div key={si} className="border border-border bg-card overflow-hidden">
+                              <div className="px-3 py-2 border-b border-border flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-mono flex items-center justify-center shrink-0">{si + 1}</div>
+                                <div className="text-[11px] leading-snug">{sh.caption}</div>
+                              </div>
+                              <a href={sh.src} target="_blank" rel="noreferrer" className="block">
+                                <img src={sh.src} alt={`Step ${si + 1}`}
+                                  className="w-full h-auto block hover:opacity-90 transition-opacity"
+                                  onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                              </a>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="pt-4 flex flex-col items-center gap-3 text-muted-foreground text-sm text-center p-8 border border-dashed border-border bg-card">
+                          <ImageIcon size={32} strokeWidth={1.2} />
+                          <div className="font-serif text-base text-foreground">Screenshot guide coming soon</div>
+                          <div className="max-w-md text-xs">
+                            For now, click <span className="font-medium text-primary">"{link.label}"</span> above to open the page directly in Seller Central.
+                            <br/>Range: <span className="font-mono text-foreground">{link.range}</span> — {link.range_hint}
                           </div>
                         </div>
-                        <Dialog>
-                          <DialogTrigger asChild>
-                            <button className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-muted-foreground hover:text-foreground" data-testid={`help-${ft}`}>
-                              <HelpCircle size={11}/> Show screenshot
-                            </button>
-                          </DialogTrigger>
-                          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
-                            <DialogHeader>
-                              <DialogTitle className="font-serif text-2xl">{FILE_TYPE_LABELS[ft]}</DialogTitle>
-                              <DialogDescription>{link.help}</DialogDescription>
-                            </DialogHeader>
-                            <div className="flex-1 overflow-y-auto pr-1 space-y-4">
-                              {link.screenshots && link.screenshots.length > 0 ? (
-                                link.screenshots.map((sh, si) => (
-                                  <div key={si} className="border border-border bg-muted/30 overflow-hidden">
-                                    <div className="px-4 py-2.5 bg-card border-b border-border flex items-center gap-3">
-                                      <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-[11px] font-mono flex items-center justify-center">{si + 1}</div>
-                                      <div className="text-sm">{sh.caption}</div>
-                                    </div>
-                                    <img src={sh.src} alt={`Step ${si + 1}`} className="w-full h-auto block"
-                                      onError={(e) => { e.currentTarget.style.display = "none"; }} />
-                                  </div>
-                                ))
-                              ) : link.screenshot ? (
-                                <div className="border border-border bg-muted/30 flex items-center justify-center min-h-[320px]">
-                                  <img src={link.screenshot} alt={FILE_TYPE_LABELS[ft]} className="max-w-full max-h-[520px] object-contain"
-                                    onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement.querySelector('.ss-fallback').style.display = 'flex'; }} />
-                                  <div className="ss-fallback flex-col items-center gap-3 text-muted-foreground text-sm text-center p-8" style={{ display: "none" }}>
-                                    <ImageIcon size={40} strokeWidth={1.2} />
-                                    <div className="font-serif text-lg text-foreground">Screenshot coming soon</div>
-                                    <div className="max-w-md">For now, click <span className="font-medium text-primary">"{link.label}"</span> above to open the page directly in Seller Central.</div>
-                                  </div>
-                                </div>
-                              ) : (
-                                <div className="border border-border bg-muted/30 flex flex-col items-center gap-3 text-muted-foreground text-sm text-center p-10">
-                                  <ImageIcon size={40} strokeWidth={1.2} />
-                                  <div className="font-serif text-lg text-foreground">Screenshot coming soon</div>
-                                  <div className="max-w-md">For now, click <span className="font-medium text-primary">"{link.label}"</span> above to open the page directly in Seller Central.</div>
-                                </div>
-                              )}
-                            </div>
-                            <div className="text-xs text-muted-foreground pt-2 border-t border-border">
-                              <span className="font-mono text-foreground">Date range: {link.range}</span> — {link.range_hint}
-                            </div>
-                            <DialogFooter>
-                              <a href={link.url} target="_blank" rel="noreferrer" className="btn-emerald text-xs">
-                                <ExternalLink size={11} className="inline mr-2"/> Open Seller Central
-                              </a>
-                            </DialogFooter>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                    )}
-                  </div>
-                  <div className="col-span-4 text-sm text-muted-foreground truncate flex items-center gap-2 pt-1">
-                    {info ? <><FileText size={12}/> <span className="truncate">{info.filename}</span> <span className="text-xs shrink-0">({info.count} rows)</span></> : "—"}
-                  </div>
-                  <div className="col-span-2 text-right pt-1">
-                    {info && <button onClick={() => removeFile(ft)} className="text-muted-foreground hover:text-destructive" data-testid={`remove-${ft}`}><X size={14}/></button>}
-                  </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
