@@ -1,12 +1,55 @@
-import React from "react";
+import React, { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Upload, Calculator, FileDown, ShieldCheck, Sparkles, Package, TrendingUp, IndianRupee } from "lucide-react";
+import { ArrowRight, Upload, Calculator, FileDown, ShieldCheck, Sparkles, Package, TrendingUp, IndianRupee, Play, Video } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 function loginWithGoogle() {
   const redirectUrl = window.location.origin + "/dashboard";
   window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
+}
+
+// Drop your walkthrough at /app/frontend/public/help/walkthrough.mp4 and it appears here automatically.
+function VideoPlayer() {
+  const [state, setState] = useState("idle"); // idle | playing | missing
+  const videoRef = useRef(null);
+  const start = async () => {
+    if (state === "missing") return;
+    setState("playing");
+    // Wait for element to mount, then try to play
+    setTimeout(() => {
+      const v = videoRef.current;
+      if (!v) return;
+      v.play().catch(() => {});
+    }, 50);
+  };
+  return (
+    <div className="border border-border bg-card aspect-video overflow-hidden relative group" data-testid="landing-video">
+      {state === "playing" ? (
+        <video ref={videoRef} controls autoPlay className="w-full h-full object-contain bg-black"
+          onError={() => setState("missing")}>
+          <source src="/help/walkthrough.mp4" type="video/mp4" />
+        </video>
+      ) : state === "missing" ? (
+        <div className="w-full h-full flex flex-col items-center justify-center gap-3 p-10 text-center bg-muted/30">
+          <Video size={40} strokeWidth={1.2} className="text-muted-foreground"/>
+          <div className="font-serif text-2xl">Video coming soon</div>
+          <p className="text-sm text-muted-foreground max-w-md">Save your recording to <span className="font-mono text-foreground">public/help/walkthrough.mp4</span> and it'll appear here automatically.</p>
+        </div>
+      ) : (
+        <button onClick={start} className="w-full h-full flex flex-col items-center justify-center gap-4 relative bg-primary text-primary-foreground hover:brightness-110 transition-all" data-testid="play-video-btn">
+          <div className="absolute inset-0 opacity-20" style={{ background: "radial-gradient(circle at 30% 40%, #F4B223 0%, transparent 60%)" }}/>
+          <div className="w-20 h-20 rounded-full bg-accent text-accent-foreground flex items-center justify-center relative">
+            <Play size={28} fill="currentColor" strokeWidth={0} className="ml-1"/>
+          </div>
+          <div className="relative">
+            <div className="font-serif text-3xl mb-1">60-second walkthrough</div>
+            <div className="text-sm opacity-70 uppercase tracking-[0.2em]">Click to play</div>
+          </div>
+        </button>
+      )}
+    </div>
+  );
 }
 
 export default function Landing() {
@@ -23,6 +66,7 @@ export default function Landing() {
             <span className="ml-3 text-[10px] uppercase tracking-[0.3em] text-muted-foreground align-middle">Amazon P&amp;L</span>
           </div>
           <div className="flex items-center gap-2">
+            <a href="#watch" className="btn-ghost hidden md:inline-block" data-testid="nav-watch">Watch</a>
             <a href="#how-it-works" className="btn-ghost hidden md:inline-block" data-testid="nav-how">How it works</a>
             <a href="#pricing" className="btn-ghost hidden md:inline-block" data-testid="nav-pricing">Pricing</a>
             {user ? (
@@ -61,7 +105,7 @@ export default function Landing() {
             <div className="mt-10 flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-muted-foreground">
               <div className="flex items-center gap-2"><ShieldCheck size={14}/> No credit card</div>
               <div className="flex items-center gap-2"><Sparkles size={14}/> Auto-detects file types</div>
-              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹249 lifetime — no subscription</div>
+              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹249 for 1 year — cancel anytime</div>
             </div>
           </div>
 
@@ -89,6 +133,30 @@ export default function Landing() {
                 <div>Profit% 63.4%</div>
                 <div>Return% 3.1%</div>
               </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Video walkthrough */}
+      <section id="watch" className="border-b border-border">
+        <div className="max-w-[1400px] mx-auto px-8 py-24">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+            <div className="lg:col-span-4">
+              <div className="label-caps mb-4">Watch a walkthrough</div>
+              <h2 className="font-serif text-4xl sm:text-5xl tracking-tight mb-6">See it in 60 seconds.</h2>
+              <p className="text-muted-foreground leading-relaxed mb-8">
+                Drop your six Amazon reports, enter cost prices, and get a finalized P&amp;L with charts — end to end in about a minute.
+              </p>
+              <div className="space-y-3 text-sm text-muted-foreground">
+                <div className="flex gap-3"><span className="text-accent font-mono">01</span> Upload &amp; auto-detect</div>
+                <div className="flex gap-3"><span className="text-accent font-mono">02</span> Set cost prices per SKU</div>
+                <div className="flex gap-3"><span className="text-accent font-mono">03</span> Review returns</div>
+                <div className="flex gap-3"><span className="text-accent font-mono">04</span> Export PDF + Excel</div>
+              </div>
+            </div>
+            <div className="lg:col-span-8">
+              <VideoPlayer />
             </div>
           </div>
         </div>
@@ -149,7 +217,7 @@ export default function Landing() {
         <div className="max-w-[1400px] mx-auto px-8 py-24">
           <div className="mb-16">
             <div className="label-caps mb-4">Pricing</div>
-            <h2 className="font-serif text-4xl sm:text-5xl tracking-tight">One price. Forever.</h2>
+            <h2 className="font-serif text-4xl sm:text-5xl tracking-tight">One price. One year.</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border border-border">
             <div className="p-12 bg-card border-r border-border">
@@ -162,13 +230,16 @@ export default function Landing() {
               </button>
             </div>
             <div className="p-12 bg-primary text-primary-foreground">
-              <div className="label-caps mb-4 opacity-80">Lifetime access</div>
-              <div className="font-serif text-6xl mb-2">₹249</div>
-              <p className="opacity-80 mb-8">One-time payment. Every future month, forever.</p>
+              <div className="label-caps mb-4 opacity-80">Annual access</div>
+              <div className="flex items-baseline gap-2 mb-2">
+                <div className="font-serif text-6xl">₹249</div>
+                <div className="opacity-70 text-sm">/ year</div>
+              </div>
+              <p className="opacity-80 mb-8">One payment. 365 days of full access. Renew when it expires — no auto-charge.</p>
               <button onClick={user ? () => nav("/upgrade") : loginWithGoogle}
                 className="bg-accent text-accent-foreground w-full py-3 font-medium text-sm uppercase tracking-[0.15em] hover:brightness-95"
                 data-testid="cta-pricing-lifetime">
-                Get lifetime access
+                Get annual access
               </button>
             </div>
           </div>

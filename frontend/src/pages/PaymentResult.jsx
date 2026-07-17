@@ -41,8 +41,8 @@ export function PaymentSuccess() {
         </>}
         {status === "paid" && <>
           <CheckCircle2 size={40} className="mx-auto mb-6 text-primary"/>
-          <h1 className="font-serif text-3xl mb-3">You're on Lifetime</h1>
-          <p className="text-sm text-muted-foreground mb-8">Thank you. Every month, every feature, forever.</p>
+          <h1 className="font-serif text-3xl mb-3">You're in for a year</h1>
+          <p className="text-sm text-muted-foreground mb-8">Payment confirmed. Enjoy 365 days of full access — every feature, every future month.</p>
           <Link to="/dashboard" className="btn-emerald inline-block" data-testid="success-continue">Open dashboard</Link>
         </>}
         {(status === "failed" || status === "timeout") && <>

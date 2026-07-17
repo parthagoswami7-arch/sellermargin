@@ -68,10 +68,20 @@ export default function AppShell({ children }) {
               <span className="font-mono">
                 {trialLeft > 0 ? `${trialLeft} day${trialLeft === 1 ? "" : "s"} left in trial` : "Trial expired"}
               </span>
-              <span className="opacity-70">— Unlock lifetime access for ₹249</span>
+              <span className="opacity-70">— Unlock 1 year of access for ₹249</span>
             </div>
             <button onClick={() => nav("/upgrade")} className="bg-accent text-accent-foreground px-4 py-1.5 text-xs uppercase tracking-[0.15em] font-bold hover:brightness-95" data-testid="upgrade-btn-banner">
-              Upgrade to Lifetime
+              Upgrade — ₹249 / year
+            </button>
+          </div>
+        )}
+        {status.is_paid && status.paid_days_left <= 30 && (
+          <div className="bg-accent/15 border-b border-accent/40 px-8 py-2 flex items-center justify-between">
+            <div className="text-xs text-foreground">
+              <span className="font-bold">Renewal:</span> {status.paid_days_left} day{status.paid_days_left === 1 ? "" : "s"} left on your annual plan.
+            </div>
+            <button onClick={() => nav("/upgrade")} className="text-xs uppercase tracking-[0.15em] font-bold text-primary hover:underline" data-testid="renew-btn-banner">
+              Renew now
             </button>
           </div>
         )}

@@ -71,13 +71,24 @@ def user_status(user: dict) -> dict:
         trial_start = trial_start.replace(tzinfo=timezone.utc)
     trial_end = (trial_start + timedelta(days=15)) if trial_start else now_utc()
     trial_days_left = max(0, int((trial_end - now_utc()).total_seconds() // 86400))
-    is_paid = bool(user.get("is_paid"))
-    has_access = is_paid or now_utc() < trial_end
+
+    paid_until = user.get("paid_until")
+    if isinstance(paid_until, str):
+        paid_until = datetime.fromisoformat(paid_until)
+    if paid_until and paid_until.tzinfo is None:
+        paid_until = paid_until.replace(tzinfo=timezone.utc)
+    is_paid_active = bool(paid_until and paid_until > now_utc())
+    paid_days_left = int((paid_until - now_utc()).total_seconds() // 86400) if is_paid_active else 0
+
+    has_access = is_paid_active or now_utc() < trial_end
     return {
         "trial_start": (trial_start.isoformat() if trial_start else None),
         "trial_end": trial_end.isoformat(),
         "trial_days_left": trial_days_left,
-        "is_paid": is_paid,
+        "paid_until": (paid_until.isoformat() if paid_until else None),
+        "paid_days_left": paid_days_left,
+        "is_paid": is_paid_active,           # active paying user
+        "ever_paid": bool(user.get("is_paid")),
         "has_access": has_access,
         "is_admin": bool(user.get("is_admin")),
     }
@@ -435,8 +446,20 @@ async def export_pdf_ep(rid: str, user: dict = Depends(current_user)):
     return StreamingResponse(io.BytesIO(data), media_type="application/pdf",
                              headers={"Content-Disposition": f'attachment; filename="{r["name"]}.pdf"'})
 
-# ---------------- payments (Flow B, one-time lifetime) ----------------
-LIFETIME_PACKAGE = {"id": "lifetime", "amount": 3.0, "currency": "usd", "label": "Lifetime Access (₹249 / ~$3)"}
+# ---------------- payments (Flow B, one-time yearly) ----------------
+YEARLY_PACKAGE = {"id": "yearly", "amount": 3.0, "currency": "usd", "label": "Annual Access (₹249 / year)", "days": 365}
+
+def _extend_paid_until(current, days: int) -> datetime:
+    """Extend paid_until by `days`, starting from now or current expiry (whichever is later)."""
+    base = now_utc()
+    if current:
+        if isinstance(current, str):
+            current = datetime.fromisoformat(current)
+        if current.tzinfo is None:
+            current = current.replace(tzinfo=timezone.utc)
+        if current > base:
+            base = current
+    return base + timedelta(days=days)
 
 class CheckoutReq(BaseModel):
     origin_url: str
@@ -450,25 +473,35 @@ async def create_checkout(payload: CheckoutReq, request: Request, user: dict = D
     success = f"{payload.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
     cancel  = f"{payload.origin_url}/payment/cancel"
     req = CheckoutSessionRequest(
-        amount=LIFETIME_PACKAGE["amount"],
-        currency=LIFETIME_PACKAGE["currency"],
+        amount=YEARLY_PACKAGE["amount"],
+        currency=YEARLY_PACKAGE["currency"],
         success_url=success,
         cancel_url=cancel,
-        metadata={"user_id": user["user_id"], "package_id": LIFETIME_PACKAGE["id"]},
+        metadata={"user_id": user["user_id"], "package_id": YEARLY_PACKAGE["id"]},
     )
     session = await checkout.create_checkout_session(req)
     await db.payment_transactions.insert_one({
         "session_id": session.session_id,
         "user_id": user["user_id"],
-        "package_id": LIFETIME_PACKAGE["id"],
-        "amount": LIFETIME_PACKAGE["amount"],
-        "currency": LIFETIME_PACKAGE["currency"],
+        "package_id": YEARLY_PACKAGE["id"],
+        "amount": YEARLY_PACKAGE["amount"],
+        "currency": YEARLY_PACKAGE["currency"],
         "status": "initiated",
         "payment_status": "pending",
         "created_at": now_utc(),
         "updated_at": now_utc(),
     })
     return {"checkout_url": session.url, "session_id": session.session_id}
+
+async def _mark_user_paid(user_id: str):
+    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
+    if not user:
+        return
+    new_expiry = _extend_paid_until(user.get("paid_until"), YEARLY_PACKAGE["days"])
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc()}},
+    )
 
 @api.get("/payments/status/{session_id}")
 async def payment_status(session_id: str):
@@ -485,7 +518,7 @@ async def payment_status(session_id: str):
                     {"session_id": session_id, "payment_status": {"$ne": "paid"}},
                     {"$set": {"status": "completed", "payment_status": "paid", "updated_at": now_utc()}},
                 )
-                await db.users.update_one({"user_id": rec["user_id"]}, {"$set": {"is_paid": True, "paid_at": now_utc()}})
+                await _mark_user_paid(rec["user_id"])
                 rec = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
         except Exception:
             pass
@@ -508,12 +541,12 @@ async def stripe_webhook(request: Request):
                 {"session_id": evt.session_id},
                 {"$set": {"status": "completed", "payment_status": "paid", "updated_at": now_utc()}},
             )
-            await db.users.update_one({"user_id": rec["user_id"]}, {"$set": {"is_paid": True, "paid_at": now_utc()}})
+            await _mark_user_paid(rec["user_id"])
     return {"ok": True}
 
 @api.get("/plan")
 async def plan():
-    return {"package": LIFETIME_PACKAGE}
+    return {"package": YEARLY_PACKAGE}
 
 # ---------------- admin ----------------
 async def require_admin(user: dict = Depends(current_user)) -> dict:
