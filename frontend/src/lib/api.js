@@ -52,7 +52,10 @@ export const FILE_TYPE_LINKS = {
     help: "Under 'Reports Repository', request a Transaction report and download as CSV.",
     range: "1.5 months",
     range_hint: "Include the target month PLUS the first 7 days of the next month (Amazon posts storage fees on the 7th).",
-    screenshot: "/help/payment.png",
+    screenshots: [
+      { src: "/help/payment/step1.png", caption: "Step 1 — Open Reports Repository. Set Account Type = 'All (Unified Reports)', Report Type = 'Transaction', pick a Custom Date Range covering ~1.5 months, then click Request Report." },
+      { src: "/help/payment/step2.png", caption: "Step 2 — Once the row shows Status = Ready in the Payments Reports table, click 'Download CSV' on that row." },
+    ],
   },
   fba_returns: {
     label: "Reports → Fulfilment → FBA Customer Returns",
