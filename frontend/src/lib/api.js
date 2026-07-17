@@ -91,12 +91,16 @@ export const FILE_TYPE_LINKS = {
     ],
   },
   ad_spend: {
-    label: "Ads Console → Reports → Sponsored Products (Campaign)",
+    label: "Ads Console → Reports → Sponsored Products (Budget)",
     url: "https://advertising.amazon.in/reports",
-    help: "Create a Campaign report and download as CSV.",
+    help: "Create a Budget report for the target month and download as CSV.",
     range: "1 month",
     range_hint: "Set report date range to the full target month.",
-    screenshot: "/help/ad_spend.png",
+    screenshots: [
+      { src: "/help/ad_spend/step1.png", caption: "Step 1 — On Sponsored Ads Reports, click 'Create report' (top-left blue button)." },
+      { src: "/help/ad_spend/step2.png", caption: "Step 2 — Under Configuration set Report category = Sponsored Products, then choose 'Budget' from the Report type dropdown." },
+      { src: "/help/ad_spend/step3.png", caption: "Step 3 — In Report period click the date pill, pick your target-month range from the calendar, click Save, then click 'Run report' at the top." },
+    ],
   },
 };
 
