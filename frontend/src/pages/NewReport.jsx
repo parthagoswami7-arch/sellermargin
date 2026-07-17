@@ -150,27 +150,42 @@ export default function NewReport() {
                               <HelpCircle size={11}/> Show screenshot
                             </button>
                           </DialogTrigger>
-                          <DialogContent className="max-w-3xl">
+                          <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
                             <DialogHeader>
                               <DialogTitle className="font-serif text-2xl">{FILE_TYPE_LABELS[ft]}</DialogTitle>
                               <DialogDescription>{link.help}</DialogDescription>
                             </DialogHeader>
-                            <div className="border border-border bg-muted/30 flex items-center justify-center min-h-[320px] overflow-hidden">
-                              <img
-                                src={link.screenshot}
-                                alt={`How to download ${FILE_TYPE_LABELS[ft]}`}
-                                className="max-w-full max-h-[520px] object-contain"
-                                onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement.querySelector('.ss-fallback').style.display = 'flex'; }}
-                              />
-                              <div className="ss-fallback flex-col items-center gap-3 text-muted-foreground text-sm text-center p-8" style={{ display: "none" }}>
-                                <ImageIcon size={40} strokeWidth={1.2} />
-                                <div className="font-serif text-lg text-foreground">Screenshot coming soon</div>
-                                <div className="max-w-md">
-                                  For now, click <span className="font-medium text-primary">"{link.label}"</span> above to open the page directly in Seller Central.
+                            <div className="flex-1 overflow-y-auto pr-1 space-y-4">
+                              {link.screenshots && link.screenshots.length > 0 ? (
+                                link.screenshots.map((sh, si) => (
+                                  <div key={si} className="border border-border bg-muted/30 overflow-hidden">
+                                    <div className="px-4 py-2.5 bg-card border-b border-border flex items-center gap-3">
+                                      <div className="w-6 h-6 rounded-full bg-primary text-primary-foreground text-[11px] font-mono flex items-center justify-center">{si + 1}</div>
+                                      <div className="text-sm">{sh.caption}</div>
+                                    </div>
+                                    <img src={sh.src} alt={`Step ${si + 1}`} className="w-full h-auto block"
+                                      onError={(e) => { e.currentTarget.style.display = "none"; }} />
+                                  </div>
+                                ))
+                              ) : link.screenshot ? (
+                                <div className="border border-border bg-muted/30 flex items-center justify-center min-h-[320px]">
+                                  <img src={link.screenshot} alt={FILE_TYPE_LABELS[ft]} className="max-w-full max-h-[520px] object-contain"
+                                    onError={(e) => { e.currentTarget.style.display = "none"; e.currentTarget.parentElement.querySelector('.ss-fallback').style.display = 'flex'; }} />
+                                  <div className="ss-fallback flex-col items-center gap-3 text-muted-foreground text-sm text-center p-8" style={{ display: "none" }}>
+                                    <ImageIcon size={40} strokeWidth={1.2} />
+                                    <div className="font-serif text-lg text-foreground">Screenshot coming soon</div>
+                                    <div className="max-w-md">For now, click <span className="font-medium text-primary">"{link.label}"</span> above to open the page directly in Seller Central.</div>
+                                  </div>
                                 </div>
-                              </div>
+                              ) : (
+                                <div className="border border-border bg-muted/30 flex flex-col items-center gap-3 text-muted-foreground text-sm text-center p-10">
+                                  <ImageIcon size={40} strokeWidth={1.2} />
+                                  <div className="font-serif text-lg text-foreground">Screenshot coming soon</div>
+                                  <div className="max-w-md">For now, click <span className="font-medium text-primary">"{link.label}"</span> above to open the page directly in Seller Central.</div>
+                                </div>
+                              )}
                             </div>
-                            <div className="text-xs text-muted-foreground">
+                            <div className="text-xs text-muted-foreground pt-2 border-t border-border">
                               <span className="font-mono text-foreground">Date range: {link.range}</span> — {link.range_hint}
                             </div>
                             <DialogFooter>

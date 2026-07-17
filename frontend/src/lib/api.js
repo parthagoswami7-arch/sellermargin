@@ -40,7 +40,11 @@ export const FILE_TYPE_LINKS = {
     help: "Choose 'By Last Update' or 'By Order Date', pick your target month, download as .txt (tab-separated).",
     range: "1 month",
     range_hint: "Set the date range to the full target month (1st → last day).",
-    screenshot: "/help/orders.png",
+    screenshots: [
+      { src: "/help/orders/step1.png", caption: "Step 1 — Open Fulfilment Reports and click 'All Orders' under Most Popular Reports." },
+      { src: "/help/orders/step2.png", caption: "Step 2 — Under Event Date, choose 'Exact dates' from the dropdown." },
+      { src: "/help/orders/step3.png", caption: "Step 3 — Pick your target month (e.g. 01/06/2026 → 30/06/2026), click Request Download, then Download once ready." },
+    ],
   },
   payment: {
     label: "Payments → Reports Repository → Transaction",
