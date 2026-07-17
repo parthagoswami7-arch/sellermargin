@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import api, { monthName, money } from "../lib/api";
 import { Plus, FileText, Trash2, TrendingUp, Clock } from "lucide-react";
 import { toast } from "sonner";
+import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LineChart, Line } from "recharts";
 
 export default function Dashboard() {
   const [reports, setReports] = useState([]);
@@ -31,6 +32,19 @@ export default function Dashboard() {
   const totalProfit = finalized.reduce((s, r) => s + (r.summary?.final_profit || 0), 0);
   const totalRevenue = finalized.reduce((s, r) => s + (r.summary?.total_received || 0), 0);
 
+  // Month-over-month data, sorted by (year, month) ascending
+  const momData = [...finalized]
+    .filter(r => r.summary)
+    .sort((a, b) => (a.target_year - b.target_year) || (a.target_month - b.target_month))
+    .map(r => ({
+      period: `${monthName(r.target_month)} ${String(r.target_year).slice(-2)}`,
+      Received: r.summary.total_received,
+      Deducted: r.summary.total_deduction,
+      Profit: r.summary.final_profit,
+      Ads: r.summary.ad_spend,
+      "Profit %": r.summary.profit_pct,
+    }));
+
   return (
     <div className="p-10 max-w-[1400px]">
       <div className="flex items-end justify-between mb-10">
@@ -56,6 +70,47 @@ export default function Dashboard() {
           <div className="p-6">
             <div className="label-caps mb-2">Total final profit</div>
             <div className="font-serif text-4xl num text-primary">{money(totalProfit)}</div>
+          </div>
+        </div>
+      )}
+
+      {momData.length >= 2 && (
+        <div className="border border-border bg-card mb-10" data-testid="mom-chart">
+          <div className="p-4 border-b border-border flex items-baseline justify-between">
+            <div className="label-caps">Month-over-month</div>
+            <div className="text-xs text-muted-foreground">{momData.length} months</div>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-2">
+            <div className="p-6 lg:border-r border-border">
+              <div className="label-caps mb-3 text-[10px]">Revenue vs Profit</div>
+              <div className="h-64">
+                <ResponsiveContainer>
+                  <BarChart data={momData} margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
+                    <CartesianGrid stroke="#D8DAD5" vertical={false}/>
+                    <XAxis dataKey="period" tick={{ fontSize: 11, fill: "#5C5F5A" }} axisLine={{ stroke: "#D8DAD5" }} tickLine={false}/>
+                    <YAxis tick={{ fontSize: 10, fill: "#5C5F5A" }} axisLine={{ stroke: "#D8DAD5" }} tickLine={false} tickFormatter={(v) => (v/1000).toFixed(0)+"k"}/>
+                    <Tooltip formatter={(v) => money(v)} contentStyle={{ background: "#fff", border: "1px solid #D8DAD5", borderRadius: 0, fontSize: 12 }}/>
+                    <Legend wrapperStyle={{ fontSize: 11 }}/>
+                    <Bar dataKey="Received" fill="#5C7D77" />
+                    <Bar dataKey="Profit" fill="#044535" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="label-caps mb-3 text-[10px]">Profit % trend</div>
+              <div className="h-64">
+                <ResponsiveContainer>
+                  <LineChart data={momData} margin={{ top: 4, right: 12, left: 4, bottom: 0 }}>
+                    <CartesianGrid stroke="#D8DAD5" vertical={false}/>
+                    <XAxis dataKey="period" tick={{ fontSize: 11, fill: "#5C5F5A" }} axisLine={{ stroke: "#D8DAD5" }} tickLine={false}/>
+                    <YAxis tick={{ fontSize: 10, fill: "#5C5F5A" }} axisLine={{ stroke: "#D8DAD5" }} tickLine={false} tickFormatter={(v) => v.toFixed(0)+"%"}/>
+                    <Tooltip formatter={(v) => `${Number(v).toFixed(2)}%`} contentStyle={{ background: "#fff", border: "1px solid #D8DAD5", borderRadius: 0, fontSize: 12 }}/>
+                    <Line type="monotone" dataKey="Profit %" stroke="#F4B223" strokeWidth={2} dot={{ fill: "#F4B223", r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         </div>
       )}

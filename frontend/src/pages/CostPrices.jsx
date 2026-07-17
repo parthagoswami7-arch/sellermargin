@@ -1,12 +1,14 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import api, { money } from "../lib/api";
-import { Search, Trash2, Save } from "lucide-react";
+import { Search, Trash2, Save, Upload, Download } from "lucide-react";
 import { toast } from "sonner";
 
 export default function CostPrices() {
   const [rows, setRows] = useState([]);
   const [q, setQ] = useState("");
   const [newRow, setNewRow] = useState({ sku: "", cost_price: "", product_name: "" });
+  const [importing, setImporting] = useState(false);
+  const fileRef = useRef(null);
 
   const load = async () => {
     const r = await api.get("/cost-prices");
@@ -30,11 +32,54 @@ export default function CostPrices() {
     load();
   };
 
+  const importCsv = async (fileList) => {
+    if (!fileList || !fileList[0]) return;
+    setImporting(true);
+    const fd = new FormData();
+    fd.append("file", fileList[0]);
+    try {
+      const r = await api.post("/cost-prices/import-csv", fd, { headers: { "Content-Type": "multipart/form-data" }});
+      toast.success(`Imported ${r.data.added} SKUs${r.data.skipped ? ` · ${r.data.skipped} skipped` : ""}`);
+      if (r.data.errors?.length) r.data.errors.forEach(e => toast.error(e));
+      load();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Import failed");
+    } finally {
+      setImporting(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  };
+
+  const downloadTemplate = () => {
+    const csv = "sku,cost_price,product_name\nEXAMPLE-SKU-1,199.50,Example Product 1\nEXAMPLE-SKU-2,349.00,Example Product 2\n";
+    const blob = new Blob([csv], { type: "text/csv" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "cost_prices_template.csv";
+    a.click();
+  };
+
   return (
     <div className="p-10 max-w-[1200px]">
       <div className="label-caps mb-2">Library</div>
       <h1 className="font-serif text-5xl tracking-tight mb-2">Cost prices</h1>
       <p className="text-muted-foreground mb-8">Your SKU cost library. These are used every month automatically.</p>
+
+      {/* Bulk import */}
+      <div className="border border-border bg-card mb-6 p-6 flex items-center gap-4 flex-wrap">
+        <div className="flex-1 min-w-[220px]">
+          <div className="label-caps mb-1">Bulk import from CSV</div>
+          <div className="text-xs text-muted-foreground">Columns: <span className="font-mono">sku, cost_price, product_name</span> (product_name optional)</div>
+        </div>
+        <button onClick={downloadTemplate} className="btn-outline text-xs" data-testid="download-template-btn">
+          <Download size={12} className="inline mr-2"/> Template
+        </button>
+        <label className="btn-emerald text-xs cursor-pointer" data-testid="import-csv-label">
+          <Upload size={12} className="inline mr-2"/> {importing ? "Importing…" : "Import CSV"}
+          <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" onChange={e => importCsv(e.target.files)}
+            className="hidden" data-testid="import-csv-input"/>
+        </label>
+      </div>
 
       <div className="border border-border bg-card mb-8 p-6">
         <div className="label-caps mb-4">Add / update SKU</div>

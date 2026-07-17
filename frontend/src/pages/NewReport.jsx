@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import api, { FILE_TYPE_ORDER, FILE_TYPE_LABELS, monthName } from "../lib/api";
-import { Upload, CheckCircle2, X, ArrowRight, FileText } from "lucide-react";
+import api, { FILE_TYPE_ORDER, FILE_TYPE_LABELS, FILE_TYPE_LINKS, monthName } from "../lib/api";
+import { Upload, CheckCircle2, X, ArrowRight, FileText, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 export default function NewReport() {
@@ -119,19 +119,28 @@ export default function NewReport() {
             <div className="p-4 border-b border-border label-caps">Required reports ({filesUploaded}/6 detected)</div>
             {FILE_TYPE_ORDER.map((ft, i) => {
               const info = files[ft];
+              const link = FILE_TYPE_LINKS[ft];
               return (
-                <div key={ft} className={`grid grid-cols-12 px-6 py-4 items-center ${i < 5 ? "border-b border-border" : ""}`}>
-                  <div className="col-span-1">
+                <div key={ft} className={`grid grid-cols-12 px-6 py-4 items-start ${i < 5 ? "border-b border-border" : ""}`}>
+                  <div className="col-span-1 pt-1">
                     {info ? <CheckCircle2 size={18} className="text-primary" /> : <div className="w-4 h-4 border border-border rounded-full" />}
                   </div>
                   <div className="col-span-5">
                     <div className="text-sm font-medium">{FILE_TYPE_LABELS[ft]}</div>
                     {ft === "orders" && <div className="text-xs text-destructive mt-0.5">Required</div>}
+                    {link && (
+                      <a href={link.url} target="_blank" rel="noreferrer"
+                        className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em] text-primary hover:underline"
+                        data-testid={`sc-link-${ft}`} title={link.help}>
+                        <ExternalLink size={11} /> {link.label}
+                      </a>
+                    )}
+                    {link && <div className="text-[11px] text-muted-foreground mt-1">{link.help}</div>}
                   </div>
-                  <div className="col-span-4 text-sm text-muted-foreground truncate flex items-center gap-2">
-                    {info ? <><FileText size={12}/> {info.filename} <span className="text-xs">({info.count} rows)</span></> : "—"}
+                  <div className="col-span-4 text-sm text-muted-foreground truncate flex items-center gap-2 pt-1">
+                    {info ? <><FileText size={12}/> <span className="truncate">{info.filename}</span> <span className="text-xs shrink-0">({info.count} rows)</span></> : "—"}
                   </div>
-                  <div className="col-span-2 text-right">
+                  <div className="col-span-2 text-right pt-1">
                     {info && <button onClick={() => removeFile(ft)} className="text-muted-foreground hover:text-destructive" data-testid={`remove-${ft}`}><X size={14}/></button>}
                   </div>
                 </div>

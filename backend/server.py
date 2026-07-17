@@ -192,6 +192,44 @@ async def bulk_costs(items: list[CostPrice], user: dict = Depends(current_user))
         )
     return {"ok": True, "count": len(items)}
 
+@api.post("/cost-prices/import-csv")
+async def import_costs_csv(file: UploadFile = File(...), user: dict = Depends(current_user)):
+    """Import SKU cost prices from CSV/TSV. Expected columns: sku, cost_price, product_name (optional)."""
+    raw = await file.read()
+    text = raw.decode("utf-8", errors="replace").lstrip("\ufeff")
+    import csv as _csv, io as _io
+    # detect delimiter
+    delim = ","
+    if "\t" in text.splitlines()[0] if text else "":
+        delim = "\t"
+    reader = _csv.DictReader(_io.StringIO(text), delimiter=delim)
+    added = 0
+    skipped = 0
+    errors: list[str] = []
+    for i, row in enumerate(reader, start=2):
+        # case-insensitive col lookup
+        lc = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k}
+        sku = lc.get("sku") or lc.get("seller-sku") or lc.get("merchant-sku") or lc.get("skus")
+        cp  = lc.get("cost_price") or lc.get("cost price") or lc.get("cost") or lc.get("unit cost") or lc.get("unit_cost")
+        pn  = lc.get("product_name") or lc.get("product name") or lc.get("product") or lc.get("title") or ""
+        if not sku or not cp:
+            skipped += 1
+            continue
+        try:
+            price = float(str(cp).replace(",", "").replace("₹", "").replace("$", ""))
+        except Exception:
+            errors.append(f"row {i}: bad cost '{cp}'")
+            skipped += 1
+            continue
+        await db.cost_prices.update_one(
+            {"user_id": user["user_id"], "sku": sku},
+            {"$set": {"cost_price": price, "product_name": pn, "updated_at": now_utc()},
+             "$setOnInsert": {"user_id": user["user_id"], "sku": sku, "created_at": now_utc()}},
+            upsert=True,
+        )
+        added += 1
+    return {"added": added, "skipped": skipped, "errors": errors[:20]}
+
 # ---------------- reports ----------------
 class CreateReport(BaseModel):
     name: Optional[str] = None
