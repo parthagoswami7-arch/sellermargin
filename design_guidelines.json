@@ -1,0 +1,104 @@
+{
+  "theme": "light",
+  "typography": {
+    "headings": "Cormorant Garamond",
+    "body": "Manrope",
+    "data_numbers": "JetBrains Mono",
+    "hierarchy": {
+      "h1": "text-5xl sm:text-6xl tracking-tight leading-none font-medium",
+      "h2": "text-3xl sm:text-4xl tracking-tight font-medium",
+      "h3": "text-xl sm:text-2xl font-medium",
+      "body": "text-base leading-relaxed",
+      "data": "text-sm tabular-nums tracking-tight font-mono",
+      "labels": "text-xs uppercase tracking-[0.2em] font-bold"
+    },
+    "instructions_to_main_agent": "Use Cormorant Garamond for all marketing headings and the giant metrics on the dashboard. Use Manrope for standard UI text, paragraphs, and labels. EXCLUSIVELY use JetBrains Mono for all tables, monetary values, P&L data, and percentages. This 'Serif + Mono' pairing creates a premium, high-trust 'Old Money Tech' aesthetic that breaks away from typical generic SaaS."
+  },
+  "colors": {
+    "palette": {
+      "background": "#F8F9FA",
+      "foreground": "#0A0B0A",
+      "primary": "#044535",
+      "primary_foreground": "#FFFFFF",
+      "accent": "#F4B223",
+      "accent_foreground": "#0A0B0A",
+      "destructive": "#D93025",
+      "destructive_foreground": "#FFFFFF",
+      "muted": "#EBECEA",
+      "muted_foreground": "#5C5F5A",
+      "border": "#D8DAD5",
+      "returns_highlight": "#FFF4E5"
+    },
+    "instructions_to_main_agent": "Adhere strictly to this palette. The base is an earthy Stark/Bone White. The Primary color is Deep Emerald (#044535), communicating financial trust and precision. Accent is a muted Gold/Yellow (#F4B223) – USE THIS SPECIFICALLY for the 'Cost Price' input fields to indicate they are editable. Use 'returns_highlight' (soft orange) to highlight the rows in the Returns review screen."
+  },
+  "layouts": {
+    "landing_page": "High-contrast Swiss layout. Use massive serif typography for the hero. Instead of standard centered columns, use an asymmetrical bento grid for the features. Rely on generous padding (p-16 to p-32).",
+    "dashboard": "High-density technical grid. Use a 'border-collapse' style layout for widgets. No floating cards with soft drop-shadows. Expose the skeleton using crisp 1px borders on all widgets to mimic advanced financial ledgers.",
+    "spacing_scale": "p-2, p-4, p-6, p-8, p-12, p-16, p-24, p-32"
+  },
+  "grids": {
+    "bento_marketing": "grid-cols-1 md:grid-cols-12 gap-8. Hero spans col-span-8, secondary visuals col-span-4.",
+    "dashboard_metrics": "grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 for the top metric cards (Revenue, COGS, Fees, Storage, Profit).",
+    "instructions_to_main_agent": "Always use Tailwind grid patterns. Items must be direct children of the grid. Override default stretch with align-items: start if needed."
+  },
+  "component_specific_instructions": {
+    "tables": "Spreadsheet-inspired. Compact padding (p-2, p-3). Visible column dividers (border-r). Headers must be uppercase and tracking-wider. Use JetBrains Mono for all cell data.",
+    "inputs": "Cost Price inputs MUST have a subtle yellow/gold background (bg-accent/10) and border (border-accent) to immediately stand out as the primary user action area.",
+    "buttons": "Sharp corners (rounded-none or rounded-sm). Primary buttons use Deep Emerald. Hover states must increase contrast and not rely on opacity fading.",
+    "file_upload": "Use a dashed border dropzone with a clear Icon (Lucide). Change border to Deep Emerald on drag over.",
+    "navigation": "Solid background (bg-background) with a hard bottom border (border-b). DO NOT use transparent backgrounds."
+  },
+  "visual_enhancers": {
+    "borders": "The Technical Look: Heavy use of 1px border-border lines to separate sections. Use border-collapse for tables.",
+    "shadows": "Minimalist. Avoid soft blurs. Use sharp 4px offset shadows for dropdowns/modals if needed. The dashboard should feel completely flat and paper-like.",
+    "surfaces": "No Glassmorphism on the dashboard. Use Solid backgrounds to prevent visual refraction of financial data."
+  },
+  "motion": {
+    "interactions": "Fast, crisp micro-interactions. Use Framer Motion for row expansions (e.g., viewing past month history).",
+    "transitions": "Use specific properties (e.g., transition-colors, transition-transform) rather than 'transition-all'."
+  },
+  "accessibility": {
+    "contrast": "Ensure JetBrains Mono text over tinted backgrounds meets 4.5:1 ratio. Provide focus rings (ring-primary) on all inputs.",
+    "testing": "CRITICAL: All interactive elements MUST include a data-testid attribute (e.g., data-testid='upload-reports-button', data-testid='cost-price-input')."
+  },
+  "media": {
+    "image_urls": [
+      {
+        "url": "https://images.unsplash.com/photo-1553413077-190dd305871c",
+        "category": "hero_background",
+        "description": "Large e-commerce warehouse showing massive scale. Use with a heavy overlay (bg-background/80 or solid Deep Emerald overlay) to ensure text legibility on the marketing page."
+      },
+      {
+        "url": "https://images.pexels.com/photos/5668884/pexels-photo-5668884.jpeg",
+        "category": "testimonials_or_audience",
+        "description": "Indian business owner analyzing data. Ideal for the 'Who is this for?' or Testimonials section."
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1707157284454-553ef0a4ed0d?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAxODF8MHwxfHNlYXJjaHwzfHxhY2NvdW50aW5nJTIwZGVzayUyMGZpbmFuY2V8ZW58MHx8fHwxNzgyNzU3MTU0fDA&ixlib=rb-4.1.0&q=85",
+        "category": "features_finance",
+        "description": "Financial desk with charts. Use in the feature section describing the P&L reconciliation."
+      }
+    ]
+  },
+  "3d_libraries": {
+    "recommendation": "Not recommended for this specific app. The focus is on precision financial data and accounting. Using 2D Recharts (Bar/Donut) provides better clarity than 3D for P&L reconciliation."
+  },
+  "UNIVERSAL_GUIDELINES_FOR_MAIN_AGENT": [
+    "NEVER center-align the app container. All text flows naturally from the left.",
+    "AVOID generic 'AI slop' aesthetics. No purple gradients, no soft blob shapes.",
+    "IMPLEMENT data-testid on EVERY interactive element (buttons, inputs, toggles, links).",
+    "DO NOT use generic fonts like Inter or Roboto. Strictly stick to Cormorant Garamond, Manrope, and JetBrains Mono.",
+    "DASHBOARD must feel like a precision tool, not a toy. Maximize screen real estate. Use tight margins in data views.",
+    "NEVER use completely transparent backgrounds for headers, navs, or dropdowns. Always use solid bg-background.",
+    "Use Lucide-react for all icons. Keep icon weights consistent (stroke-width 1.5).",
+    "Use Sonner for toast notifications and ensure they align with the sharp, flat aesthetic."
+  ],
+  "libraries_to_install": [
+    "lucide-react",
+    "recharts",
+    "framer-motion",
+    "clsx",
+    "tailwind-merge",
+    "sonner"
+  ]
+}
