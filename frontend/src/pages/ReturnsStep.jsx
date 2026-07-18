@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api, { money } from "../lib/api";
-import { ArrowRight, ArrowLeft, Info, PackageCheck, PackageX, Sparkles, Wand2, RotateCcw } from "lucide-react";
+import { ArrowRight, ArrowLeft, Info, PackageCheck, PackageX, PackageSearch, Sparkles, Wand2, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 
 const isSellable = (r) => (r.product_condition || "").toLowerCase().includes("sellable");
@@ -216,27 +216,18 @@ export default function ReturnsStep() {
             </div>
           )}
 
-          <div className="flex items-center justify-between mt-8">
-            <button onClick={() => nav(`/report/${id}/costs`)} className="btn-ghost" data-testid="back-costs">
-              <ArrowLeft size={14} className="inline mr-2"/> Back
-            </button>
-            <div className="flex items-center gap-4">
-              {impact.savings > 0 && (
-                <div className="text-xs text-primary flex items-center gap-2">
-                  <Sparkles size={12}/> Overrides save <span className="font-mono font-bold">{money(impact.savings)}</span> on COGS
+          {/* EASY SHIP section (customer return + RTO — condition unknown, inspect manually) */}
+          {easyship.length > 0 && (
+            <div className="border border-accent bg-card mb-6" data-testid="easyship-section">
+              <div className="p-4 border-b border-accent/40 flex items-center gap-3">
+                <PackageSearch size={16} className="text-accent"/>
+                <div>
+                  <div className="text-sm font-medium">Easy Ship — inspect manually ({easyship.length})</div>
+                  <div className="text-xs text-muted-foreground">Includes both customer returns and RTO. Amazon doesn't share condition — check the package: keep full cost if damaged/lost, or set your repackaging fee if resellable.</div>
                 </div>
-              )}
-              <button onClick={save} disabled={saving} className="btn-emerald" data-testid="finalize-btn">
-                {saving ? "Generating…" : "Generate report"} <ArrowRight size={14} className="inline ml-2"/>
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-          <div className="col-span-3">Order</div>
+              </div>
+              <div className="grid grid-cols-12 py-2 px-4 bg-muted/30 border-b border-accent/40 label-caps text-[10px]">
+                <div className="col-span-3">Order</div>
                 <div className="col-span-2">SKU</div>
                 <div className="col-span-1 text-right">Qty</div>
                 <div className="col-span-2 text-right">Default cost</div>
