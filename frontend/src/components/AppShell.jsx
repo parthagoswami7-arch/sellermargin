@@ -28,9 +28,12 @@ export default function AppShell({ children }) {
     <div className="min-h-screen flex bg-background">
       <aside className="w-64 border-r border-border bg-card flex flex-col">
         <div className="px-6 py-6 border-b border-border">
-          <Link to="/dashboard" className="block" data-testid="brand-link">
-            <div className="font-serif text-2xl leading-none tracking-tight">Ledger<span className="text-primary">.</span></div>
-            <div className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground mt-1">Amazon P&L</div>
+          <Link to="/dashboard" className="flex items-center gap-3" data-testid="brand-link">
+            <img src="/brand/logo.png" alt="Seller Margin" className="h-9 w-9 object-contain shrink-0"/>
+            <div>
+              <div className="font-serif text-lg leading-none tracking-tight">Seller Margin</div>
+              <div className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground mt-1">Amazon P&amp;L</div>
+            </div>
           </Link>
         </div>
         <nav className="flex-1 py-4">

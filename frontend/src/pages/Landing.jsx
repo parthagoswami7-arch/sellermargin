@@ -61,9 +61,12 @@ export default function Landing() {
       {/* Top bar */}
       <nav className="border-b border-border bg-background">
         <div className="max-w-[1400px] mx-auto px-8 py-5 flex items-center justify-between">
-          <div className="font-serif text-2xl leading-none tracking-tight">
-            Ledger<span className="text-primary">.</span>
-            <span className="ml-3 text-[10px] uppercase tracking-[0.3em] text-muted-foreground align-middle">Amazon P&amp;L</span>
+          <div className="flex items-center gap-3">
+            <img src="/brand/logo.png" alt="Seller Margin" className="h-10 w-10 object-contain"/>
+            <div>
+              <div className="font-serif text-xl leading-none tracking-tight">Seller Margin</div>
+              <div className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground mt-1">Amazon P&amp;L</div>
+            </div>
           </div>
           <div className="flex items-center gap-2">
             <a href="#watch" className="btn-ghost hidden md:inline-block" data-testid="nav-watch">Watch</a>
@@ -92,7 +95,7 @@ export default function Landing() {
               <span className="italic text-primary">reconciled in minutes.</span>
             </h1>
             <p className="text-lg text-muted-foreground max-w-2xl mb-10 leading-relaxed">
-              Upload six reports from Seller Central. We handle the VLOOKUPs, pivot tables and fee reconciliation.
+              Upload five reports from Seller Central. We handle the VLOOKUPs, pivot tables and fee reconciliation.
               You get a clean profit statement, per-SKU cost tracking and audit-ready Excel + PDF exports.
             </p>
             <div className="flex flex-wrap gap-4">
@@ -171,7 +174,7 @@ export default function Landing() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-border">
             {[
-              { icon: Upload, num: "01", title: "Drop six reports", body: "All Orders, Settlement, FBA Returns, Easy Ship Returns, FBA Removal, Sponsored Products. We auto-detect each file — no naming, no ordering." },
+              { icon: Upload, num: "01", title: "Drop five reports", body: "All Orders, Settlement, FBA Returns, Easy Ship Returns, and Sponsored Products. We auto-detect each file — no naming, no ordering." },
               { icon: Calculator, num: "02", title: "Set cost prices", body: "Enter unit cost for every SKU once. We remember them month over month. For sellable returns, override the cost with your repackaging fee." },
               { icon: FileDown, num: "03", title: "Get your P&L", body: "Instant dashboard with Revenue, COGS, fees, Ad spend, and Final Profit. Export a shareable PDF or the full Excel workbook." },
             ].map((s, i) => (
@@ -247,7 +250,7 @@ export default function Landing() {
       </section>
 
       <footer className="py-12 text-center text-xs text-muted-foreground">
-        <div>© 2026 Ledger — Amazon P&amp;L Reconciliation. Made with care for sellers.</div>
+        <div>© 2026 Seller Margin — Amazon P&amp;L Reconciliation. Made with care for sellers.</div>
       </footer>
     </div>
   );

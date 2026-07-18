@@ -28,7 +28,7 @@ db = client[DB_NAME]
 
 stripe.api_key = STRIPE_API_KEY
 
-app = FastAPI(title="Amazon Monthly P&L Reconciliation")
+app = FastAPI(title="Seller Margin — Amazon Monthly P&L Reconciliation")
 api = APIRouter(prefix="/api")
 
 # ---------------- utils ----------------
