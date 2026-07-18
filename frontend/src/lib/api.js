@@ -26,7 +26,6 @@ export const FILE_TYPE_LABELS = {
   payment: "Settlement / Payment (.csv)",
   fba_returns: "FBA Customer Returns (.csv)",
   easyship_returns: "Easy Ship Returns (.tsv)",
-  fba_removal: "FBA Removal Order (.csv)",
   ad_spend: "Sponsored Products Ads (.csv)",
 };
 
@@ -79,17 +78,6 @@ export const FILE_TYPE_LINKS = {
       { src: "/help/easyship_returns/step2.png", caption: "Step 2 — Enter a 1.5-month From→To range (e.g. 06/01/2026 → 07/15/2026), click Request, then click Download under the TSV column once the row appears." },
     ],
   },
-  fba_removal: {
-    label: "Reports → Fulfilment → FBA Removal Order Detail",
-    url: "https://sellercentral.amazon.in/reportcentral/REMOVAL_ORDER_DETAIL/1",
-    help: "On Removal Order Detail, request a CSV for the target month and download.",
-    range: "1 month",
-    range_hint: "Just the target month is enough.",
-    screenshots: [
-      { src: "/help/fba_removal/step1.png", caption: "Step 1 — On the Removal Order Detail page, click the 'Download' tab, then under Event Date pick 'Exact dates' from the dropdown." },
-      { src: "/help/fba_removal/step2.png", caption: "Step 2 — Set the From→To range to the target month (e.g. 01/06/2026 → 30/06/2026), click 'Request .csv Download', then click Download once the row appears." },
-    ],
-  },
   ad_spend: {
     label: "Ads Console → Reports → Sponsored Products (Budget)",
     url: "https://advertising.amazon.in/reports",
@@ -109,6 +97,5 @@ export const FILE_TYPE_ORDER = [
   "payment",
   "fba_returns",
   "easyship_returns",
-  "fba_removal",
   "ad_spend",
 ];

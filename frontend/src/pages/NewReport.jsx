@@ -118,14 +118,14 @@ export default function NewReport() {
 
           {/* File slots */}
           <div className="border border-border bg-card">
-            <div className="p-4 border-b border-border label-caps">Required reports ({filesUploaded}/6 detected)</div>
+            <div className="p-4 border-b border-border label-caps">Required reports ({filesUploaded}/5 detected)</div>
             {FILE_TYPE_ORDER.map((ft, i) => {
               const info = files[ft];
               const link = FILE_TYPE_LINKS[ft];
               const hasSteps = link && link.screenshots && link.screenshots.length > 0;
               const isOpen = !!expanded[ft];
               return (
-                <div key={ft} className={i < 5 ? "border-b border-border" : ""}>
+                <div key={ft} className={i < FILE_TYPE_ORDER.length - 1 ? "border-b border-border" : ""}>
                   <div className="grid grid-cols-12 px-6 py-4 items-start gap-2">
                     <div className="col-span-1 pt-1">
                       {info ? <CheckCircle2 size={18} className="text-primary" /> : <div className="w-4 h-4 border border-border rounded-full" />}

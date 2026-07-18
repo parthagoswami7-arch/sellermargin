@@ -218,7 +218,19 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     chosen_storage = storage_matches_after if storage_matches_after else storage_matches_all
     storage_fee = -sum(_num(col(p, "total")) for p in chosen_storage)
 
-    removal_fee = sum(_num(col(r, "removal-fee")) for r in fba_removal)
+    # Removal fee: computed from the Payment report itself — any row whose description
+    # contains "removal order" (case-insensitive) AND whose date is inside the target month.
+    # Amazon stores these as negative totals; flip sign to positive expense.
+    removal_total = 0.0
+    removal_matches = 0
+    for p in month_txns:
+        desc = str(col(p, "description")).lower()
+        if "removal order" not in desc:
+            continue
+        removal_matches += 1
+        removal_total += _num(col(p, "total"))
+    removal_fee = -removal_total
+
     ad_total    = sum(_num(col(a, "Spend", "spend")) for a in ad_spend)
 
     total_received  = total_payment + reimbursement
