@@ -8,6 +8,34 @@ const isSellable = (r) => (r.product_condition || "").toLowerCase().includes("se
 const isDamagedFba = (r) => r.return_source === "fba" && !isSellable(r);
 const isEasyShip = (r) => r.return_source === "easyship";
 
+function ReturnRow({ r, last, onChange, showKind = false }) {
+  const eff = r.override !== "" ? Number(r.override) : Number(r.cost_price_unit || 0);
+  const rowSaving = (Number(r.quantity || 0)) * (Number(r.cost_price_unit || 0) - eff);
+  return (
+    <div className={`grid grid-cols-12 py-3 px-4 items-center row-return ${!last ? "border-b border-border" : ""}`}>
+      <div className="col-span-3 num text-xs">{r.order_id}</div>
+      <div className="col-span-2 num text-sm">{r.sku}</div>
+      <div className="col-span-1 num text-sm text-right">{r.quantity}</div>
+      <div className="col-span-2 num text-sm text-right text-muted-foreground">{money(r.cost_price_unit)}</div>
+      <div className="col-span-2">
+        <input
+          type="text"
+          inputMode="decimal"
+          value={r.override}
+          onChange={(e) => onChange(r.order_id, e.target.value)}
+          placeholder={isSellable(r) ? "Repack fee ₹" : (isEasyShip(r) ? "Inspect & set" : "Keep full cost")}
+          className="cost-input text-right"
+          data-testid={`override-${r.order_id}`}
+        />
+      </div>
+      <div className={`col-span-2 num text-sm text-right ${rowSaving > 0 ? "text-primary font-medium" : (rowSaving < 0 ? "text-destructive" : "text-muted-foreground")}`}>
+        {rowSaving > 0 ? `− ${money(rowSaving)}` : (rowSaving < 0 ? `+ ${money(-rowSaving)}` : "—")}
+        {showKind && r.return_kind && <div className="text-[9px] uppercase tracking-[0.15em] font-bold text-muted-foreground mt-0.5">{r.return_kind === "rto" ? "RTO" : "Customer"} · {r.return_reason}</div>}
+      </div>
+    </div>
+  );
+}
+
 export default function ReturnsStep() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -92,29 +120,7 @@ export default function ReturnsStep() {
     } finally { setSaving(false); }
   };
 
-  const Row = ({ r, i, last, showKind = false }) => {
-    const eff = r.override !== "" ? Number(r.override) : Number(r.cost_price_unit || 0);
-    const rowSaving = (Number(r.quantity || 0)) * (Number(r.cost_price_unit || 0) - eff);
-    return (
-      <div className={`grid grid-cols-12 py-3 px-4 items-center row-return ${!last ? "border-b border-border" : ""}`}>
-        <div className="col-span-3 num text-xs">{r.order_id}</div>
-        <div className="col-span-2 num text-sm">{r.sku}</div>
-        <div className="col-span-1 num text-sm text-right">{r.quantity}</div>
-        <div className="col-span-2 num text-sm text-right text-muted-foreground">{money(r.cost_price_unit)}</div>
-        <div className="col-span-2">
-          <input type="number" step="0.01" value={r.override}
-            onChange={e => setOverride(r.order_id, e.target.value)}
-            placeholder={isSellable(r) ? "Repack fee ₹" : (isEasyShip(r) ? "Inspect & set" : "Keep full cost")}
-            className="cost-input text-right"
-            data-testid={`override-${r.order_id}`} />
-        </div>
-        <div className={`col-span-2 num text-sm text-right ${rowSaving > 0 ? "text-primary font-medium" : (rowSaving < 0 ? "text-destructive" : "text-muted-foreground")}`}>
-          {rowSaving > 0 ? `− ${money(rowSaving)}` : (rowSaving < 0 ? `+ ${money(-rowSaving)}` : "—")}
-          {showKind && r.return_kind && <div className="text-[9px] uppercase tracking-[0.15em] font-bold text-muted-foreground mt-0.5">{r.return_kind === "rto" ? "RTO" : "Customer"} · {r.return_reason}</div>}
-        </div>
-      </div>
-    );
-  };
+  // ReturnRow is defined at module scope so React keeps the input focused across re-renders.
 
   return (
     <div className="p-10 max-w-[1300px]">
@@ -187,7 +193,7 @@ export default function ReturnsStep() {
                 <div className="col-span-2 text-right">Savings</div>
               </div>
               <div className="max-h-[300px] overflow-auto">
-                {sellable.map((r, i) => <Row key={r.order_id + i} r={r} i={i} last={i === sellable.length - 1}/>)}
+                {sellable.map((r, i) => <ReturnRow key={r.order_id + i} r={r} last={i === sellable.length - 1} onChange={setOverride} />)}
               </div>
             </div>
           )}
@@ -211,7 +217,7 @@ export default function ReturnsStep() {
                 <div className="col-span-2 text-right">Savings</div>
               </div>
               <div className="max-h-[300px] overflow-auto">
-                {damaged.map((r, i) => <Row key={r.order_id + i} r={r} i={i} last={i === damaged.length - 1}/>)}
+                {damaged.map((r, i) => <ReturnRow key={r.order_id + i} r={r} last={i === damaged.length - 1} onChange={setOverride} />)}
               </div>
             </div>
           )}
@@ -235,7 +241,7 @@ export default function ReturnsStep() {
                 <div className="col-span-2 text-right">Type · Savings</div>
               </div>
               <div className="max-h-[300px] overflow-auto">
-                {easyship.map((r, i) => <Row key={r.order_id + i} r={r} i={i} last={i === easyship.length - 1} showKind />)}
+                {easyship.map((r, i) => <ReturnRow key={r.order_id + i} r={r} last={i === easyship.length - 1} onChange={setOverride} showKind />)}
               </div>
             </div>
           )}
