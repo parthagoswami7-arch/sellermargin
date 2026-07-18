@@ -50,7 +50,8 @@ def export_excel(report: dict) -> bytes:
         ("ACOS % (Ad spend / Item price total)", f"{s['acos_pct']:.2f}%"),
         ("Profit % (Final profit / Item price total)", f"{s['profit_pct']:.2f}%"),
         ("Profit % on Cost price", f"{s['profit_pct_on_cogs']:.2f}%"),
-        ("Order Return %", f"{s['return_pct']:.2f}%"),
+        ("Customer Return %", f"{s.get('customer_return_pct', s.get('return_pct', 0)):.2f}%"),
+        ("RTO %", f"{s.get('rto_pct', 0):.2f}%"),
     ]
 
     r = 3
@@ -151,7 +152,8 @@ def export_pdf(report: dict) -> bytes:
         ["ACOS %",               f"{s['acos_pct']:.2f}%"],
         ["Profit % (revenue)",   f"{s['profit_pct']:.2f}%"],
         ["Profit % on Cost",     f"{s['profit_pct_on_cogs']:.2f}%"],
-        ["Return %",             f"{s['return_pct']:.2f}%"],
+        ["Customer Return %",    f"{s.get('customer_return_pct', s.get('return_pct', 0)):.2f}%"],
+        ["RTO %",                f"{s.get('rto_pct', 0):.2f}%"],
         ["Orders",               str(s["orders_count"])],
         ["Returned Orders",      str(s["returns_count"])],
     ]

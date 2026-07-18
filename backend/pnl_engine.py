@@ -16,6 +16,29 @@ def is_valid_order(order_row: dict) -> bool:
     return status.lower() != "cancelled" and qty > 0 and channel.lower() != "non-amazon"
 
 
+RTO_KEYWORDS = (
+    "rto", "return to origin", "return-to-origin",
+    "undelivered", "un-delivered", "not delivered", "non-delivered",
+    "und-", "und_",         # Amazon Easy Ship code prefix e.g. UND-UNKNOWN, UND-DAMAGED
+    "refused", "customer refused", "delivery refused",
+    "ref-",                 # Easy Ship refusal code prefix
+    "customer not available", "address not found", "wrong address",
+    "no response", "not available",
+)
+
+
+def _classify_return(source: str, reason: str) -> str:
+    """Classify a return as 'customer' or 'rto'. FBA is always customer; Easy Ship
+    is customer unless the reason clearly indicates an RTO (undelivered, refused, etc.)."""
+    if source == "fba":
+        return "customer"
+    r = (reason or "").lower()
+    for kw in RTO_KEYWORDS:
+        if kw in r:
+            return "rto"
+    return "customer"
+
+
 def build_rows(orders: list[dict], payment: list[dict], fba_returns: list[dict],
                easyship_returns: list[dict], cost_prices: dict[str, float]) -> list[dict]:
     """Build the per-order rows exactly like 'final output' rows 2..N."""
@@ -56,11 +79,16 @@ def build_rows(orders: list[dict], payment: list[dict], fba_returns: list[dict],
         es_r = es_ret_by_order.get(oid)
         return_reason = ""
         product_condition = ""
+        return_source = ""
         if fba_r:
             return_reason = str(col(fba_r, "reason")).strip()
             product_condition = str(col(fba_r, "detailed-disposition")).strip()
+            return_source = "fba"
         elif es_r:
             return_reason = str(col(es_r, "return reason", "Return reason")).strip()
+            return_source = "easyship"
+
+        return_kind = _classify_return(return_source, return_reason) if return_source else ""
 
         default_unit_cost = float(cost_prices.get(sku, 0.0)) if sku in cost_prices else None
 
@@ -75,6 +103,8 @@ def build_rows(orders: list[dict], payment: list[dict], fba_returns: list[dict],
             "cost_price_unit_override": None,        # user can override for sellable returns
             "return_reason": return_reason,
             "product_condition": product_condition,
+            "return_source": return_source,          # fba / easyship / ""
+            "return_kind": return_kind,              # customer / rto / ""
             "order_status": str(col(o, "order-status")).strip(),
             "is_return": bool(return_reason or product_condition),
         })
@@ -109,6 +139,8 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     total_cogs       = sum(r["quantity"] * eff_cost(r) for r in rows)            # G66 = COGS
     orders_count     = sum(1 for r in rows if r["payment"] != 0)
     returns_count    = sum(1 for r in rows if r["is_return"] and r["payment"] != 0)
+    customer_return_count = sum(1 for r in rows if r.get("return_kind") == "customer" and r["payment"] != 0)
+    rto_count             = sum(1 for r in rows if r.get("return_kind") == "rto" and r["payment"] != 0)
 
     # Payment column aliases — Amazon renames these across marketplaces / report exports
     _DESC_HEADERS = ("description", "Description", "Transaction description", "transaction description", "type", "Type")
@@ -284,6 +316,8 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     profit_pct      = safe_div(final_profit, total_item_price)
     profit_on_cogs  = safe_div(final_profit, total_cogs)
     return_pct      = safe_div(returns_count, orders_count) if orders_count else 0.0
+    customer_return_pct = safe_div(customer_return_count, orders_count) if orders_count else 0.0
+    rto_pct             = safe_div(rto_count, orders_count) if orders_count else 0.0
 
     # Diagnostics — surface what the parser saw so users can debug missing fees
     payment_rows_with_date = 0
@@ -327,6 +361,10 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
         "profit_pct": round(profit_pct, 2),
         "profit_pct_on_cogs": round(profit_on_cogs, 2),
         "return_pct": round(return_pct, 2),
+        "customer_return_pct": round(customer_return_pct, 2),
+        "rto_pct": round(rto_pct, 2),
+        "customer_return_count": int(customer_return_count),
+        "rto_count": int(rto_count),
         "total_item_price": round(clean(total_item_price), 2),
         "orders_count": int(orders_count),
         "returns_count": int(returns_count),

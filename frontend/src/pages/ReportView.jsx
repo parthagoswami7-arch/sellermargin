@@ -75,7 +75,7 @@ export default function ReportView() {
           <div className="label-caps mb-3">Final profit</div>
           <div className="font-serif text-6xl text-primary num">{money(s.final_profit)}</div>
           <div className="text-sm text-muted-foreground mt-2">
-            {s.profit_pct.toFixed(2)}% of revenue · {s.profit_pct_on_cogs.toFixed(2)}% on cost
+            {s.profit_pct.toFixed(2)}% of revenue · {s.profit_pct_on_cogs.toFixed(2)}% on cost · {s.orders_count} orders · {(s.customer_return_count ?? 0)} customer returns · {(s.rto_count ?? 0)} RTO
           </div>
         </div>
         <div>
@@ -106,8 +106,8 @@ export default function ReportView() {
           ["Inbound fee", money(s.inbound_fee)],
           ["Storage fee", money(s.storage_fee)],
           ["ACOS %", `${s.acos_pct.toFixed(2)}%`],
-          ["Return %", `${s.return_pct.toFixed(2)}%`],
-          ["Item price total", money(s.total_item_price)],
+          ["Customer Return %", `${(s.customer_return_pct ?? s.return_pct ?? 0).toFixed(2)}%`],
+          ["RTO %", `${(s.rto_pct ?? 0).toFixed(2)}%`],
         ].map(([k,v], i) => (
           <div key={k} className={`p-6 ${i < 4 ? "md:border-r border-border" : ""} border-t border-border`}>
             <div className="label-caps mb-2">{k}</div>
