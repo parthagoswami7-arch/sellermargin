@@ -116,6 +116,51 @@ export default function ReportView() {
         ))}
       </div>
 
+      {/* Data-completeness diagnostics — show when any fee derived from Payment CSV is 0 */}
+      {s.diagnostics && (s.storage_fee === 0 || s.inbound_fee === 0 || s.removal_fee === 0) && (
+        <div className="border border-destructive/60 bg-destructive/5 mt-8" data-testid="diagnostics-panel">
+          <div className="px-6 py-4 border-b border-destructive/40 flex items-start gap-3">
+            <AlertTriangle size={20} className="text-destructive shrink-0 mt-0.5"/>
+            <div>
+              <div className="font-serif text-xl">Some fees from the Payment CSV came out as ₹0</div>
+              <div className="text-sm text-muted-foreground mt-1">
+                This usually means the Payment file didn't contain those line-items for {monthName(report.target_month)} {report.target_year}, OR the column names differ from Amazon's usual export. Check the counts below and share them if numbers still look wrong.
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-0 border-b border-destructive/20">
+            {[
+              ["Payment rows", s.diagnostics.payment_rows_total],
+              ["With date parsed", s.diagnostics.payment_rows_with_date],
+              ["In target month", s.diagnostics.payment_rows_in_target_month],
+              ["Storage matches", s.diagnostics.storage_matches, s.storage_fee === 0 ? "text-destructive" : ""],
+              ["Inbound matches", s.diagnostics.inbound_matches, s.inbound_fee === 0 ? "text-destructive" : ""],
+              ["Removal matches", s.diagnostics.removal_matches, s.removal_fee === 0 ? "text-destructive" : ""],
+            ].map(([label, val, cls], i) => (
+              <div key={label} className={`p-4 ${i < 5 ? "md:border-r border-destructive/20" : ""}`}>
+                <div className="label-caps mb-1 text-[10px]">{label}</div>
+                <div className={`font-serif text-2xl num ${cls || ""}`}>{val}</div>
+              </div>
+            ))}
+          </div>
+          <details className="px-6 py-3 text-xs">
+            <summary className="cursor-pointer text-muted-foreground hover:text-foreground uppercase tracking-[0.15em]">Show detected Payment columns &amp; sample descriptions</summary>
+            <div className="mt-3 space-y-2">
+              <div>
+                <div className="label-caps text-[10px] mb-1">Columns detected in your Payment file</div>
+                <div className="font-mono text-[11px] text-muted-foreground break-all">{(s.diagnostics.payment_columns || []).join(" · ")}</div>
+              </div>
+              <div>
+                <div className="label-caps text-[10px] mb-1 mt-3">Sample descriptions found</div>
+                <ul className="font-mono text-[11px] text-muted-foreground list-disc pl-5 space-y-0.5">
+                  {(s.diagnostics.payment_desc_samples || []).map((d, i) => <li key={i}>{d}</li>)}
+                </ul>
+              </div>
+            </div>
+          </details>
+        </div>
+      )}
+
       {/* Orphan reimbursements: reimbursement lines whose order-id is not in this month's final output */}
       {s.orphan_reimbursements && s.orphan_reimbursements.length > 0 && (
         <div className="border border-accent bg-accent/5 mt-8" data-testid="orphan-reimbursements">

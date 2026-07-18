@@ -110,8 +110,19 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     orders_count     = sum(1 for r in rows if r["payment"] != 0)
     returns_count    = sum(1 for r in rows if r["is_return"] and r["payment"] != 0)
 
-    # Payment raw filtered by date range using best-effort date column detection
-    _DATE_COLS = (
+    # Payment column aliases — Amazon renames these across marketplaces / report exports
+    _DESC_HEADERS = ("description", "Description", "Transaction description", "transaction description", "type", "Type")
+    _TOTAL_HEADERS = ("total", "Total", "amount", "Amount", "transaction amount")
+    def _pay_desc(p) -> str:
+        return str(col(p, *_DESC_HEADERS)).strip()
+    def _pay_total(p) -> float:
+        return _num(col(p, *_TOTAL_HEADERS))
+
+    # Payment raw filtered by date range using best-effort date column detection.
+    # We try known header names first, then fall back to scanning every column that
+    # smells like a date. This makes us robust to Amazon renaming headers across
+    # marketplaces / new report exports.
+    _KNOWN_DATE_HEADERS = (
         "Transaction Release Date",
         "date/time",
         "posted-date",
@@ -120,7 +131,18 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
         "transaction release date",
     )
     def _txn_date(p):
-        d = parse_date_any(col(p, *_DATE_COLS))
+        # 1) known header priority
+        d = parse_date_any(col(p, *_KNOWN_DATE_HEADERS))
+        if d is None:
+            # 2) any header containing 'date' or 'time' (case-insensitive)
+            for k, v in p.items():
+                if not k:
+                    continue
+                kl = k.strip().lower()
+                if ("date" in kl or "time" in kl) and v:
+                    d = parse_date_any(v)
+                    if d is not None:
+                        break
         if d is None:
             return None
         if d.tz is None:
@@ -152,9 +174,9 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
         total = 0.0
         kw = keyword.lower()
         for p in txns:
-            desc = str(col(p, "description")).lower()
+            desc = _pay_desc(p).lower()
             if kw in desc:
-                total += _num(col(p, "total"))
+                total += _pay_total(p)
         return total
 
     # Also update the orphan-reimbursement date lookup to use the broader helper
@@ -162,21 +184,21 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     orphan_reimbursements = []
     orphan_total = 0.0
     for p in month_txns:
-        desc = str(col(p, "description"))
+        desc = _pay_desc(p)
         if "reimbursement" not in desc.lower():
             continue
-        oid = str(col(p, "order id")).strip()
+        oid = str(col(p, "order id", "order-id", "Order ID", "amazon-order-id")).strip()
         if not oid:
             continue
         if oid in valid_ids:
             continue
-        amt = _num(col(p, "total"))
+        amt = _pay_total(p)
         orphan_total += amt
         orphan_reimbursements.append({
             "order_id": oid,
             "description": desc,
             "amount": round(amt, 2),
-            "date": str(col(p, *_DATE_COLS)),
+            "date": str(col(p, *_KNOWN_DATE_HEADERS)),
         })
 
     reimbursement = sum_by_desc(month_txns, "reimbursement")
@@ -188,12 +210,24 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     inbound_total = 0.0
     inbound_matches = 0
     for p in month_txns:
-        desc = str(col(p, "description")).lower()
+        desc = _pay_desc(p).lower()
         if "inbound" not in desc:
             continue
         inbound_matches += 1
-        inbound_total += _num(col(p, "total"))
+        inbound_total += _pay_total(p)
     inbound_fee = -inbound_total
+
+    # Removal fee: from Payment report — any line whose description contains
+    # "removal order" (case-insensitive) AND whose date is inside the target month.
+    removal_total = 0.0
+    removal_matches = 0
+    for p in month_txns:
+        desc = _pay_desc(p).lower()
+        if "removal order" not in desc:
+            continue
+        removal_matches += 1
+        removal_total += _pay_total(p)
+    removal_fee = -removal_total
 
     # Storage fee: Amazon posts this on the 7th of the month AFTER the target month.
     # Only take storage lines dated INSIDE the following calendar month — not the target
@@ -209,7 +243,7 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
 
     storage_matches = []
     for p in payment:
-        desc = str(col(p, "description")).lower()
+        desc = _pay_desc(p).lower()
         if "storage" not in desc:
             continue
         d = _txn_date(p)
@@ -217,20 +251,12 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
             continue
         if storage_start <= d < storage_end:
             storage_matches.append(p)
-    storage_fee = -sum(_num(col(p, "total")) for p in storage_matches)
+    storage_fee = -sum(_pay_total(p) for p in storage_matches)
 
     # Removal fee: computed from the Payment report itself — any row whose description
     # contains "removal order" (case-insensitive) AND whose date is inside the target month.
     # Amazon stores these as negative totals; flip sign to positive expense.
-    removal_total = 0.0
-    removal_matches = 0
-    for p in month_txns:
-        desc = str(col(p, "description")).lower()
-        if "removal order" not in desc:
-            continue
-        removal_matches += 1
-        removal_total += _num(col(p, "total"))
-    removal_fee = -removal_total
+    # (kept for compatibility — recomputed above with widened column matching)
 
     ad_total    = sum(_num(col(a, "Spend", "spend")) for a in ad_spend)
 
@@ -259,6 +285,31 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     profit_on_cogs  = safe_div(final_profit, total_cogs)
     return_pct      = safe_div(returns_count, orders_count) if orders_count else 0.0
 
+    # Diagnostics — surface what the parser saw so users can debug missing fees
+    payment_rows_with_date = 0
+    payment_desc_samples: list[str] = []
+    payment_columns: list[str] = []
+    if payment:
+        payment_columns = list(payment[0].keys())
+    seen_descs = set()
+    for p in payment:
+        if _txn_date(p) is not None:
+            payment_rows_with_date += 1
+        d = _pay_desc(p)
+        if d and d not in seen_descs and len(payment_desc_samples) < 20:
+            seen_descs.add(d)
+            payment_desc_samples.append(d)
+    diagnostics = {
+        "payment_rows_total": len(payment),
+        "payment_rows_with_date": payment_rows_with_date,
+        "payment_rows_in_target_month": len(month_txns),
+        "storage_matches": len(storage_matches),
+        "inbound_matches": int(inbound_matches),
+        "removal_matches": int(removal_matches),
+        "payment_columns": payment_columns,
+        "payment_desc_samples": payment_desc_samples,
+    }
+
     return {
         "target_month": target_month,
         "target_year": target_year,
@@ -281,4 +332,5 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
         "returns_count": int(returns_count),
         "orphan_reimbursement_total": round(clean(orphan_total), 2),
         "orphan_reimbursements": orphan_reimbursements,
+        "diagnostics": diagnostics,
     }
