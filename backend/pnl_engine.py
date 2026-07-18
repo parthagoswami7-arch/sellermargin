@@ -196,27 +196,28 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     inbound_fee = -inbound_total
 
     # Storage fee: Amazon posts this on the 7th of the month AFTER the target month.
-    # Match ANY payment line whose description contains "storage" and is dated after the
-    # target month ends. This is more robust than requiring the txn to fall exactly in
-    # the next calendar month (users' Payment export sometimes crosses week boundaries).
-    if target_month == 12:
-        target_end = pd.Timestamp(year=target_year + 1, month=1, day=1, tz="UTC")
+    # Only take storage lines dated INSIDE the following calendar month — not the target
+    # month itself (that fee belongs to the previous month) and not month+2 or later
+    # (that belongs to future months).
+    next_month = target_month + 1 if target_month < 12 else 1
+    next_year  = target_year if target_month < 12 else target_year + 1
+    storage_start = pd.Timestamp(year=next_year, month=next_month, day=1, tz="UTC")
+    if next_month == 12:
+        storage_end = pd.Timestamp(year=next_year + 1, month=1, day=1, tz="UTC")
     else:
-        target_end = pd.Timestamp(year=target_year, month=target_month + 1, day=1, tz="UTC")
+        storage_end = pd.Timestamp(year=next_year, month=next_month + 1, day=1, tz="UTC")
 
-    storage_matches_after = []
-    storage_matches_all = []
+    storage_matches = []
     for p in payment:
         desc = str(col(p, "description")).lower()
         if "storage" not in desc:
             continue
-        storage_matches_all.append(p)
         d = _txn_date(p)
-        if d is not None and d >= target_end:
-            storage_matches_after.append(p)
-    # Prefer post-target storage lines; fall back to any storage line if dates are missing.
-    chosen_storage = storage_matches_after if storage_matches_after else storage_matches_all
-    storage_fee = -sum(_num(col(p, "total")) for p in chosen_storage)
+        if d is None:
+            continue
+        if storage_start <= d < storage_end:
+            storage_matches.append(p)
+    storage_fee = -sum(_num(col(p, "total")) for p in storage_matches)
 
     # Removal fee: computed from the Payment report itself — any row whose description
     # contains "removal order" (case-insensitive) AND whose date is inside the target month.
