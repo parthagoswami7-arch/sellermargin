@@ -167,7 +167,33 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
 
     reimbursement = sum_by_desc(month_txns, "reimbursement")
     inbound_fee   = -sum_by_desc(month_txns, "fba inbound pickup service")
-    storage_fee   = -sum_by_desc(next_month_txns, "fba storage fee")
+
+    # Storage fee: Amazon posts this on the 7th of the month AFTER the target month.
+    # Match ANY payment line whose description contains "storage" and is dated after the
+    # target month ends. This is more robust than requiring the txn to fall exactly in
+    # the next calendar month (users' Payment export sometimes crosses week boundaries).
+    target_end = pd.Timestamp(year=target_year, month=target_month, day=1, tz="UTC")
+    if target_month == 12:
+        target_end = pd.Timestamp(year=target_year + 1, month=1, day=1, tz="UTC")
+    else:
+        target_end = pd.Timestamp(year=target_year, month=target_month + 1, day=1, tz="UTC")
+
+    storage_matches_after = []
+    storage_matches_all = []
+    for p in payment:
+        desc = str(col(p, "description")).lower()
+        if "storage" not in desc:
+            continue
+        storage_matches_all.append(p)
+        d = parse_date_any(col(p, "Transaction Release Date", "date/time"))
+        if d is not None:
+            if d.tz is None:
+                d = d.tz_localize("UTC")
+            if d >= target_end:
+                storage_matches_after.append(p)
+    # Prefer post-target storage lines; fall back to any storage line if dates are missing.
+    chosen_storage = storage_matches_after if storage_matches_after else storage_matches_all
+    storage_fee = -sum(_num(col(p, "total")) for p in chosen_storage)
 
     removal_fee = sum(_num(col(r, "removal-fee")) for r in fba_removal)
     ad_total    = sum(_num(col(a, "Spend", "spend")) for a in ad_spend)
