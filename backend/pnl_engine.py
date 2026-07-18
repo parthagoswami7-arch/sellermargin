@@ -110,7 +110,23 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     orders_count     = sum(1 for r in rows if r["payment"] != 0)
     returns_count    = sum(1 for r in rows if r["is_return"] and r["payment"] != 0)
 
-    # Payment raw filtered by date range using 'Transaction Release Date' / 'Parsed Date'
+    # Payment raw filtered by date range using best-effort date column detection
+    _DATE_COLS = (
+        "Transaction Release Date",
+        "date/time",
+        "posted-date",
+        "posted date",
+        "settlement-start-date",
+        "transaction release date",
+    )
+    def _txn_date(p):
+        d = parse_date_any(col(p, *_DATE_COLS))
+        if d is None:
+            return None
+        if d.tz is None:
+            d = d.tz_localize("UTC")
+        return d
+
     def payment_in_month(month: int, year: int) -> list[dict]:
         out = []
         start = pd.Timestamp(year=year, month=month, day=1, tz="UTC")
@@ -120,11 +136,9 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
         else:
             end = pd.Timestamp(year=year, month=month + 1, day=1, tz="UTC")
         for p in payment:
-            d = parse_date_any(col(p, "Transaction Release Date", "date/time"))
+            d = _txn_date(p)
             if d is None:
                 continue
-            if d.tz is None:
-                d = d.tz_localize("UTC")
             if start <= d < end:
                 out.append(p)
         return out
@@ -143,7 +157,7 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
                 total += _num(col(p, "total"))
         return total
 
-    # Reimbursements whose order-id is NOT one of our valid orders in the final output
+    # Also update the orphan-reimbursement date lookup to use the broader helper
     valid_ids = {r["order_id"] for r in rows if r.get("order_id")}
     orphan_reimbursements = []
     orphan_total = 0.0
@@ -162,17 +176,29 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
             "order_id": oid,
             "description": desc,
             "amount": round(amt, 2),
-            "date": str(col(p, "Transaction Release Date", "date/time")),
+            "date": str(col(p, *_DATE_COLS)),
         })
 
     reimbursement = sum_by_desc(month_txns, "reimbursement")
-    inbound_fee   = -sum_by_desc(month_txns, "fba inbound pickup service")
+
+    # Inbound fee: any Payment line whose description contains "inbound" (covers
+    # 'FBA Inbound Pickup Service', 'FBA Inbound Transportation Fee', 'Inbound
+    # Placement Service' etc.) AND whose date falls in the target month itself.
+    # Amazon stores these as negative totals; flip the sign to make it a positive expense.
+    inbound_total = 0.0
+    inbound_matches = 0
+    for p in month_txns:
+        desc = str(col(p, "description")).lower()
+        if "inbound" not in desc:
+            continue
+        inbound_matches += 1
+        inbound_total += _num(col(p, "total"))
+    inbound_fee = -inbound_total
 
     # Storage fee: Amazon posts this on the 7th of the month AFTER the target month.
     # Match ANY payment line whose description contains "storage" and is dated after the
     # target month ends. This is more robust than requiring the txn to fall exactly in
     # the next calendar month (users' Payment export sometimes crosses week boundaries).
-    target_end = pd.Timestamp(year=target_year, month=target_month, day=1, tz="UTC")
     if target_month == 12:
         target_end = pd.Timestamp(year=target_year + 1, month=1, day=1, tz="UTC")
     else:
@@ -185,12 +211,9 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
         if "storage" not in desc:
             continue
         storage_matches_all.append(p)
-        d = parse_date_any(col(p, "Transaction Release Date", "date/time"))
-        if d is not None:
-            if d.tz is None:
-                d = d.tz_localize("UTC")
-            if d >= target_end:
-                storage_matches_after.append(p)
+        d = _txn_date(p)
+        if d is not None and d >= target_end:
+            storage_matches_after.append(p)
     # Prefer post-target storage lines; fall back to any storage line if dates are missing.
     chosen_storage = storage_matches_after if storage_matches_after else storage_matches_all
     storage_fee = -sum(_num(col(p, "total")) for p in chosen_storage)
