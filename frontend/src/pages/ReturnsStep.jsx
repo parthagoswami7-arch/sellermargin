@@ -5,6 +5,8 @@ import { ArrowRight, ArrowLeft, Info, PackageCheck, PackageX, Sparkles, Wand2, R
 import { toast } from "sonner";
 
 const isSellable = (r) => (r.product_condition || "").toLowerCase().includes("sellable");
+const isDamagedFba = (r) => r.return_source === "fba" && !isSellable(r);
+const isEasyShip = (r) => r.return_source === "easyship";
 
 export default function ReturnsStep() {
   const { id } = useParams();
@@ -26,8 +28,9 @@ export default function ReturnsStep() {
   const setOverride = (order_id, v) =>
     setReturns(prev => prev.map(r => r.order_id === order_id ? { ...r, override: v } : r));
 
-  const sellable = useMemo(() => returns.filter(isSellable), [returns]);
-  const damaged  = useMemo(() => returns.filter(r => !isSellable(r)), [returns]);
+  const sellable  = useMemo(() => returns.filter(isSellable), [returns]);
+  const damaged   = useMemo(() => returns.filter(isDamagedFba), [returns]);
+  const easyship  = useMemo(() => returns.filter(isEasyShip), [returns]);
 
   // Live impact numbers
   const impact = useMemo(() => {
@@ -89,7 +92,7 @@ export default function ReturnsStep() {
     } finally { setSaving(false); }
   };
 
-  const Row = ({ r, i, last }) => {
+  const Row = ({ r, i, last, showKind = false }) => {
     const eff = r.override !== "" ? Number(r.override) : Number(r.cost_price_unit || 0);
     const rowSaving = (Number(r.quantity || 0)) * (Number(r.cost_price_unit || 0) - eff);
     return (
@@ -101,12 +104,13 @@ export default function ReturnsStep() {
         <div className="col-span-2">
           <input type="number" step="0.01" value={r.override}
             onChange={e => setOverride(r.order_id, e.target.value)}
-            placeholder={isSellable(r) ? "Repack fee ₹" : "Keep full cost"}
+            placeholder={isSellable(r) ? "Repack fee ₹" : (isEasyShip(r) ? "Inspect & set" : "Keep full cost")}
             className="cost-input text-right"
             data-testid={`override-${r.order_id}`} />
         </div>
-        <div className={`col-span-2 num text-sm text-right ${rowSaving > 0 ? "text-primary font-medium" : "text-muted-foreground"}`}>
-          {rowSaving > 0 ? `− ${money(rowSaving)}` : "—"}
+        <div className={`col-span-2 num text-sm text-right ${rowSaving > 0 ? "text-primary font-medium" : (rowSaving < 0 ? "text-destructive" : "text-muted-foreground")}`}>
+          {rowSaving > 0 ? `− ${money(rowSaving)}` : (rowSaving < 0 ? `+ ${money(-rowSaving)}` : "—")}
+          {showKind && r.return_kind && <div className="text-[9px] uppercase tracking-[0.15em] font-bold text-muted-foreground mt-0.5">{r.return_kind === "rto" ? "RTO" : "Customer"} · {r.return_reason}</div>}
         </div>
       </div>
     );
@@ -117,9 +121,10 @@ export default function ReturnsStep() {
       <div className="label-caps mb-2">Step 3 of 4 · Final review</div>
       <h1 className="font-serif text-5xl tracking-tight mb-2">Review returns</h1>
       <p className="text-muted-foreground mb-8 max-w-3xl">
-        Every returned order is highlighted in orange. Check the <span className="font-medium text-foreground">Product Condition</span> Amazon reported —
-        if the item is <span className="font-medium text-primary">SELLABLE</span>, replace the unit cost with just your repackaging/refurb fee.
-        For <span className="font-medium text-destructive">DAMAGED / DEFECTIVE / UNSELLABLE</span>, leave it blank so the full unit cost is applied.
+        Every returned order is highlighted in orange. There are three groups:
+        <span className="mx-1 font-medium text-primary">SELLABLE</span> (FBA-confirmed resellable — replace unit cost with your repackaging/refurb fee),
+        <span className="mx-1 font-medium text-destructive">DAMAGED / UNSELLABLE</span> (FBA-confirmed unsellable — keep full unit cost),
+        and <span className="mx-1 font-medium text-accent">EASY SHIP — INSPECT</span> (both customer returns and RTO — Amazon doesn't tell us the condition, so inspect the physical package and either keep the full cost, enter a repackaging fee, or bump the cost up if it was lost/destroyed in transit).
       </p>
 
       {returns.length === 0 ? (
@@ -138,7 +143,7 @@ export default function ReturnsStep() {
             <div className="p-6 border-b lg:border-b-0 lg:border-r border-border">
               <div className="label-caps mb-2">Returned units</div>
               <div className="font-serif text-3xl num">{impact.units}</div>
-              <div className="text-xs text-muted-foreground mt-1">{sellable.length} sellable · {damaged.length} damaged</div>
+              <div className="text-xs text-muted-foreground mt-1">{sellable.length} sellable · {damaged.length} damaged · {easyship.length} easy ship</div>
             </div>
             <div className="p-6 border-b lg:border-b-0 lg:border-r border-border">
               <div className="label-caps mb-2">Default COGS on returns</div>
@@ -207,6 +212,39 @@ export default function ReturnsStep() {
               </div>
               <div className="max-h-[300px] overflow-auto">
                 {damaged.map((r, i) => <Row key={r.order_id + i} r={r} i={i} last={i === damaged.length - 1}/>)}
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mt-8">
+            <button onClick={() => nav(`/report/${id}/costs`)} className="btn-ghost" data-testid="back-costs">
+              <ArrowLeft size={14} className="inline mr-2"/> Back
+            </button>
+            <div className="flex items-center gap-4">
+              {impact.savings > 0 && (
+                <div className="text-xs text-primary flex items-center gap-2">
+                  <Sparkles size={12}/> Overrides save <span className="font-mono font-bold">{money(impact.savings)}</span> on COGS
+                </div>
+              )}
+              <button onClick={save} disabled={saving} className="btn-emerald" data-testid="finalize-btn">
+                {saving ? "Generating…" : "Generate report"} <ArrowRight size={14} className="inline ml-2"/>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+          <div className="col-span-3">Order</div>
+                <div className="col-span-2">SKU</div>
+                <div className="col-span-1 text-right">Qty</div>
+                <div className="col-span-2 text-right">Default cost</div>
+                <div className="col-span-2 text-right">Override (₹/unit)</div>
+                <div className="col-span-2 text-right">Type · Savings</div>
+              </div>
+              <div className="max-h-[300px] overflow-auto">
+                {easyship.map((r, i) => <Row key={r.order_id + i} r={r} i={i} last={i === easyship.length - 1} showKind />)}
               </div>
             </div>
           )}
