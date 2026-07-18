@@ -69,12 +69,12 @@ export default function AppShell({ children }) {
             <div className="flex items-center gap-3 text-sm">
               <Sparkles size={16} />
               <span className="font-mono">
-                {trialLeft > 0 ? `${trialLeft} day${trialLeft === 1 ? "" : "s"} left in trial` : "Trial expired"}
+                No active plan
               </span>
-              <span className="opacity-70">— Unlock 1 year of access for ₹249</span>
+              <span className="opacity-70">— redeem an activation code to unlock (₹49 / 10 days or ₹499 / 1 year)</span>
             </div>
             <button onClick={() => nav("/upgrade")} className="bg-accent text-accent-foreground px-4 py-1.5 text-xs uppercase tracking-[0.15em] font-bold hover:brightness-95" data-testid="upgrade-btn-banner">
-              Upgrade — ₹249 / year
+              Redeem code
             </button>
           </div>
         )}

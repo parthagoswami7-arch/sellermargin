@@ -239,8 +239,7 @@ export default function ReportView() {
         <div className="p-4 border-b border-border flex items-center justify-between">
           <div className="label-caps">Per-order breakdown</div>
           <div className="text-xs text-muted-foreground">Orange rows are returns</div>
-        </div>
-        <div className="grid grid-cols-12 py-2 px-4 bg-muted/40 border-b border-border label-caps text-[10px]">
+        </div>        <div className="grid grid-cols-12 py-2 px-4 bg-muted/40 border-b border-border label-caps text-[10px]">
           <div className="col-span-3">Order</div>
           <div className="col-span-2">SKU</div>
           <div className="col-span-1 text-right">Qty</div>
@@ -263,6 +262,17 @@ export default function ReportView() {
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* GST note — final profit reconciliation */}
+      <div className="border-l-4 border-accent bg-accent/5 px-6 py-5 mt-8" data-testid="gst-note">
+        <div className="label-caps mb-2 text-[10px]">Important — GST reconciliation</div>
+        <div className="font-serif text-lg leading-snug">
+          Net profit &nbsp;=&nbsp; Gross profit <span className="text-muted-foreground text-sm">(the ₹ {money(s.final_profit).replace("₹ ", "")} shown above)</span> &nbsp;−&nbsp; Net GST payable
+        </div>
+        <div className="text-xs text-muted-foreground mt-2">
+          The "Final Profit" on this page is your <span className="font-medium text-foreground">gross</span> profit — GST collected on sales, GST paid on inputs, and any net GST payable to the government are not yet subtracted. Please deduct your net GST liability separately from your GSTR filing to arrive at true net profit.
         </div>
       </div>
     </div>

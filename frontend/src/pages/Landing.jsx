@@ -108,7 +108,7 @@ export default function Landing() {
             <div className="mt-10 flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-muted-foreground">
               <div className="flex items-center gap-2"><ShieldCheck size={14}/> No credit card</div>
               <div className="flex items-center gap-2"><Sparkles size={14}/> Auto-detects file types</div>
-              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹249 for 1 year — cancel anytime</div>
+              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹49 for 10 days · ₹499 for 1 year</div>
             </div>
           </div>
 

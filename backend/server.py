@@ -129,12 +129,14 @@ async def create_session(payload: SessionRequest, response: Response):
         await db.users.update_one({"user_id": user_id}, {"$set": update})
     else:
         user_id = f"user_{uuid.uuid4().hex[:12]}"
+        # No automatic free trial anymore — users must redeem an activation code.
         await db.users.insert_one({
             "user_id": user_id,
             "email": email,
             "name": name,
             "picture": picture,
             "trial_start": now_utc(),
+            "paid_until": None,
             "is_paid": False,
             "is_admin": email in ADMIN_EMAILS,
             "created_at": now_utc(),
@@ -446,8 +448,19 @@ async def export_pdf_ep(rid: str, user: dict = Depends(current_user)):
     return StreamingResponse(io.BytesIO(data), media_type="application/pdf",
                              headers={"Content-Disposition": f'attachment; filename="{r["name"]}.pdf"'})
 
+# ---------------- plans + activation codes ----------------
+async def require_admin(user: dict = Depends(current_user)) -> dict:
+    if not user.get("is_admin"):
+        raise HTTPException(403, "Admin only")
+    return user
+
+PLANS = {
+    "trial_10": {"id": "trial_10", "days": 10,  "price_inr": 49,  "label": "10-Day Trial",   "amount": 0.65, "currency": "usd"},
+    "annual":   {"id": "annual",   "days": 365, "price_inr": 499, "label": "1-Year Access",  "amount": 6.0,  "currency": "usd"},
+}
+
 # ---------------- payments (Flow B, one-time yearly) ----------------
-YEARLY_PACKAGE = {"id": "yearly", "amount": 3.0, "currency": "usd", "label": "Annual Access (₹249 / year)", "days": 365}
+YEARLY_PACKAGE = PLANS["annual"]
 
 def _extend_paid_until(current, days: int) -> datetime:
     """Extend paid_until by `days`, starting from now or current expiry (whichever is later)."""
@@ -460,6 +473,88 @@ def _extend_paid_until(current, days: int) -> datetime:
         if current > base:
             base = current
     return base + timedelta(days=days)
+
+
+def _gen_code() -> str:
+    """Format: SM-XXXX-XXXX-XXXX (SM = Seller Margin), uppercase, no ambiguous chars."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+    import secrets
+    chunks = ["".join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3)]
+    return "SM-" + "-".join(chunks)
+
+
+class RedeemReq(BaseModel):
+    code: str
+
+@api.post("/codes/redeem")
+async def redeem_code(payload: RedeemReq, user: dict = Depends(current_user)):
+    code = (payload.code or "").strip().upper()
+    if not code:
+        raise HTTPException(400, "Enter an activation code")
+    rec = await db.activation_codes.find_one({"code": code}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Invalid activation code")
+    if rec.get("status") == "used":
+        raise HTTPException(400, "This code has already been used")
+
+    plan = PLANS.get(rec["plan"])
+    if not plan:
+        raise HTTPException(400, "Unknown plan on this code")
+
+    fresh_user = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
+    new_expiry = _extend_paid_until(fresh_user.get("paid_until"), plan["days"])
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc(),
+                  "last_plan": plan["id"]}},
+    )
+    await db.activation_codes.update_one(
+        {"code": code},
+        {"$set": {"status": "used", "used_by": user["user_id"], "used_by_email": user.get("email"),
+                  "used_at": now_utc()}},
+    )
+    return {"ok": True, "plan": plan, "paid_until": new_expiry.isoformat()}
+
+
+# ---------------- admin: codes ----------------
+class GenerateCodesReq(BaseModel):
+    plan: str
+    count: int = Field(..., ge=1, le=500)
+
+@api.post("/admin/codes/generate")
+async def admin_generate_codes(payload: GenerateCodesReq, _: dict = Depends(require_admin)):
+    if payload.plan not in PLANS:
+        raise HTTPException(400, f"Unknown plan '{payload.plan}'")
+    codes = []
+    for _i in range(payload.count):
+        # Ensure uniqueness (loop until unique — extremely unlikely to collide but safe)
+        while True:
+            c = _gen_code()
+            existing = await db.activation_codes.find_one({"code": c}, {"_id": 0})
+            if not existing:
+                break
+        doc = {
+            "code": c,
+            "plan": payload.plan,
+            "status": "active",
+            "used_by": None,
+            "used_by_email": None,
+            "used_at": None,
+            "created_at": now_utc(),
+        }
+        await db.activation_codes.insert_one(doc)
+        codes.append(c)
+    return {"codes": codes}
+
+@api.get("/admin/codes")
+async def admin_list_codes(_: dict = Depends(require_admin)):
+    docs = await db.activation_codes.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=2000)
+    return {"codes": docs}
+
+
+@api.get("/plans")
+async def public_plans():
+    return {"plans": PLANS}
 
 class CheckoutReq(BaseModel):
     origin_url: str
@@ -549,11 +644,6 @@ async def plan():
     return {"package": YEARLY_PACKAGE}
 
 # ---------------- admin ----------------
-async def require_admin(user: dict = Depends(current_user)) -> dict:
-    if not user.get("is_admin"):
-        raise HTTPException(403, "Admin only")
-    return user
-
 @api.get("/admin/stats")
 async def admin_stats(_: dict = Depends(require_admin)):
     total_users = await db.users.count_documents({})

@@ -63,6 +63,16 @@ def export_excel(report: dict) -> bytes:
             c.font = Font(bold=True, size=14, color=EMERALD)
         r += 1
 
+    # GST reconciliation note
+    r += 1
+    note_cell = ws.cell(r, 1, "Note: Net profit = Gross profit (Final Profit above) − Net GST payable")
+    note_cell.font = Font(italic=True, color=EMERALD)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+    r += 1
+    note2 = ws.cell(r, 1, "GST liability from GSTR filings is not subtracted in this sheet — please deduct separately.")
+    note2.font = Font(italic=True, color="5C5F5A", size=10)
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=2)
+
     ws.column_dimensions["A"].width = 46
     ws.column_dimensions["B"].width = 20
 
@@ -172,6 +182,12 @@ def export_pdf(report: dict) -> bytes:
         ("BOTTOMPADDING", (0,0), (-1,-1), 6),
     ]))
     story.append(dt)
+
+    story.append(Spacer(1, 14))
+    note_style = ParagraphStyle("gst", parent=styles["Normal"], fontSize=10, textColor=colors.HexColor("#" + EMERALD), leading=14, spaceBefore=6)
+    note_sub   = ParagraphStyle("gsts", parent=styles["Normal"], fontSize=9, textColor=colors.HexColor("#5C5F5A"), leading=13)
+    story.append(Paragraph("<b>Note:</b> Net profit = Gross profit (Final Profit above) − Net GST payable", note_style))
+    story.append(Paragraph("GST liability from GSTR filings is not subtracted in this sheet — please deduct your net GST payable separately to arrive at true net profit.", note_sub))
 
     doc.build(story)
     return buf.getvalue()
