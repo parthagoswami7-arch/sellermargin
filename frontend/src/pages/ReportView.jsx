@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import api, { money, monthName, API_BASE } from "../lib/api";
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
-import { FileDown, Download, ArrowLeft, TrendingUp, Percent } from "lucide-react";
+import { FileDown, Download, ArrowLeft, TrendingUp, Percent, AlertTriangle } from "lucide-react";
 
 const PALETTE = ["#044535", "#F4B223", "#5C7D77", "#B34335", "#8A8F7A"];
 
@@ -115,6 +115,39 @@ export default function ReportView() {
           </div>
         ))}
       </div>
+
+      {/* Orphan reimbursements: reimbursement lines whose order-id is not in this month's final output */}
+      {s.orphan_reimbursements && s.orphan_reimbursements.length > 0 && (
+        <div className="border border-accent bg-accent/5 mt-8" data-testid="orphan-reimbursements">
+          <div className="px-6 py-4 border-b border-accent/40 flex items-start gap-3">
+            <AlertTriangle size={20} className="text-accent shrink-0 mt-0.5"/>
+            <div className="flex-1">
+              <div className="font-serif text-xl">
+                {s.orphan_reimbursements.length} reimbursement{s.orphan_reimbursements.length === 1 ? "" : "s"} without a matching order this month
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Amazon paid these amounts (total <span className="font-mono text-foreground">{money(s.orphan_reimbursement_total)}</span>) but the order-id isn't among the {s.orders_count} valid orders in this month's output — most likely lost/damaged inventory or a return from a previous month. They're still counted in <span className="font-mono text-foreground">{money(s.reimbursement)}</span> reimbursement total. Verify each is legitimate.
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-12 py-2 px-6 bg-muted/30 border-b border-accent/40 label-caps text-[10px]">
+            <div className="col-span-3">Order ID</div>
+            <div className="col-span-6">Description</div>
+            <div className="col-span-2">Date</div>
+            <div className="col-span-1 text-right">Amount</div>
+          </div>
+          <div className="max-h-[240px] overflow-auto">
+            {s.orphan_reimbursements.map((o, i) => (
+              <div key={i} className={`grid grid-cols-12 py-2 px-6 items-center text-xs ${i < s.orphan_reimbursements.length - 1 ? "border-b border-accent/20" : ""}`}>
+                <div className="col-span-3 num">{o.order_id}</div>
+                <div className="col-span-6 text-muted-foreground truncate" title={o.description}>{o.description}</div>
+                <div className="col-span-2 num text-muted-foreground">{o.date ? new Date(o.date).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—"}</div>
+                <div className="col-span-1 num text-right font-medium">{money(o.amount)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">

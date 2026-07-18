@@ -143,6 +143,28 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
                 total += _num(col(p, "total"))
         return total
 
+    # Reimbursements whose order-id is NOT one of our valid orders in the final output
+    valid_ids = {r["order_id"] for r in rows if r.get("order_id")}
+    orphan_reimbursements = []
+    orphan_total = 0.0
+    for p in month_txns:
+        desc = str(col(p, "description"))
+        if "reimbursement" not in desc.lower():
+            continue
+        oid = str(col(p, "order id")).strip()
+        if not oid:
+            continue
+        if oid in valid_ids:
+            continue
+        amt = _num(col(p, "total"))
+        orphan_total += amt
+        orphan_reimbursements.append({
+            "order_id": oid,
+            "description": desc,
+            "amount": round(amt, 2),
+            "date": str(col(p, "Transaction Release Date", "date/time")),
+        })
+
     reimbursement = sum_by_desc(month_txns, "reimbursement")
     inbound_fee   = -sum_by_desc(month_txns, "fba inbound pickup service")
     storage_fee   = -sum_by_desc(next_month_txns, "fba storage fee")
@@ -195,4 +217,6 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
         "total_item_price": round(clean(total_item_price), 2),
         "orders_count": int(orders_count),
         "returns_count": int(returns_count),
+        "orphan_reimbursement_total": round(clean(orphan_total), 2),
+        "orphan_reimbursements": orphan_reimbursements,
     }
