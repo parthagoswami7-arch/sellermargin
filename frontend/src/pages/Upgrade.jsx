@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { Check, Sparkles, Ticket, Zap, FileText, ChevronDown, Package } from "lucide-react";
+import { Check, Sparkles, Ticket, Zap, FileText, ChevronDown, Package, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { load as loadCashfree } from "@cashfreepayments/cashfree-js";
 import { whatsappLink } from "../components/WhatsAppFab";
@@ -21,6 +22,8 @@ function computeGst(basePrice, buyerState, sellerState) {
 
 export default function Upgrade() {
   const { user, refresh } = useAuth();
+  const [sp] = useSearchParams();
+  const highlightTopup = sp.get("highlight") === "topup";
   const [plans, setPlans] = useState({});
   const [upcoming, setUpcoming] = useState({});
   const [code, setCode] = useState("");
@@ -89,9 +92,11 @@ export default function Upgrade() {
   const paidActive = status?.is_paid;
   const trial = plans.trial_10;
   const annual = plans.annual;
+  const topup = plans.topup_5;
   const agency = upcoming.agency_starter;
   const trialGst  = trial  ? computeGst(trial.price_inr,  gForm.buyer_state, seller.state) : null;
   const annualGst = annual ? computeGst(annual.price_inr, gForm.buyer_state, seller.state) : null;
+  const topupGst  = topup  ? computeGst(topup.price_inr,  gForm.buyer_state, seller.state) : null;
 
   return (
     <div className="p-10 max-w-6xl">
@@ -186,7 +191,7 @@ export default function Upgrade() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-border mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-border mb-6">
         {trial && (
           <PlanCard title="7-day trial" plan={trial} gst={trialGst}
             payingPlan={payingPlan} onBuy={() => buy("trial_10")}
@@ -199,6 +204,29 @@ export default function Upgrade() {
         )}
         {agency && <AgencyComingSoonCard plan={agency}/>}
       </div>
+
+      {/* Top-up strip — flexible add-on */}
+      {topup && (
+        <div id="topup" className={`border p-6 mb-10 flex flex-wrap items-center gap-6 transition-all ${
+          highlightTopup ? "border-accent bg-accent/10 shadow-lg" : "border-border bg-card"
+        }`} data-testid="topup-card">
+          <div className="flex items-center gap-4 flex-1 min-w-[280px]">
+            <div className="w-12 h-12 border-2 border-primary bg-primary/5 flex items-center justify-center shrink-0">
+              <Plus size={20} className="text-primary"/>
+            </div>
+            <div>
+              <div className="label-caps mb-1">Need more reports?</div>
+              <div className="font-serif text-2xl">5 extra reports · ₹249 <span className="text-sm text-muted-foreground font-sans">+ 18% GST</span></div>
+              <div className="text-xs text-muted-foreground mt-1">Adds 5 to your existing balance · doesn't extend your access period{topupGst && <> · <b>total ₹{topupGst.total.toFixed(2)}</b></>}</div>
+            </div>
+          </div>
+          <button onClick={() => buy("topup_5")} disabled={payingPlan !== null}
+            className="btn-emerald px-6" data-testid="buy-topup-btn">
+            <Zap size={12} className="inline mr-2"/>
+            {payingPlan === "topup_5" ? "Opening checkout…" : `Buy top-up · ₹${topupGst ? topupGst.total.toFixed(2) : topup.price_inr}`}
+          </button>
+        </div>
+      )}
 
       <div className="border border-border bg-card p-8">
         <div className="label-caps mb-4 flex items-center gap-2"><Ticket size={14}/> Have an activation code?</div>
@@ -221,20 +249,37 @@ function PlanCard({ title, primary, plan, gst, payingPlan, onBuy, testid }) {
   const anyPaying = payingPlan !== null;
   const rupee = (v) => `₹${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   const quota = plan.reports_quota || 0;
+  const hasDiscount = plan.list_price_inr && plan.list_price_inr > plan.price_inr;
+  const savings = hasDiscount ? plan.list_price_inr - plan.price_inr : 0;
 
   return (
-    <div className={`p-10 ${primary ? "bg-primary text-primary-foreground" : "bg-card border-b md:border-b-0 md:border-r border-border"}`}>
+    <div className={`p-10 relative ${primary ? "bg-primary text-primary-foreground" : "bg-card border-b md:border-b-0 md:border-r border-border"}`}>
+      {hasDiscount && (
+        <div className="absolute top-3 right-3 bg-accent text-accent-foreground text-[10px] uppercase tracking-[0.15em] font-bold px-2 py-1" data-testid={`fomo-${plan.id}`}>
+          Save ₹{savings}
+        </div>
+      )}
       <div className={`label-caps mb-4 ${primary ? "opacity-80" : ""}`}>{title}</div>
-      <div className="flex items-baseline gap-2 mb-1">
+      <div className="flex items-baseline gap-3 mb-1 flex-wrap">
         <div className="font-serif text-5xl">₹{plan.price_inr}</div>
+        {hasDiscount && (
+          <div className={`text-xl line-through font-serif ${primary ? "opacity-60" : "text-muted-foreground"}`} data-testid={`strike-${plan.id}`}>
+            ₹{plan.list_price_inr}
+          </div>
+        )}
         <div className={`text-sm ${primary ? "opacity-70" : "text-muted-foreground"}`}>+ 18% GST</div>
       </div>
-      <div className={`text-xs mb-4 ${primary ? "opacity-70" : "text-muted-foreground"}`}>
+      <div className={`text-xs mb-1 ${primary ? "opacity-70" : "text-muted-foreground"}`}>
         for {plan.days} days
       </div>
+      {hasDiscount && (
+        <div className={`text-[11px] uppercase tracking-[0.15em] font-bold mb-4 ${primary ? "text-accent" : "text-primary"}`}>
+          ⚡ Launch offer · limited time
+        </div>
+      )}
 
       {/* Report quota chip */}
-      <div className={`flex items-center gap-2 mb-6 px-3 py-2 text-sm border ${primary ? "border-primary-foreground/30 bg-primary-foreground/10" : "border-accent bg-accent/10 text-foreground"}`}>
+      <div className={`flex items-center gap-2 mb-6 mt-3 px-3 py-2 text-sm border ${primary ? "border-primary-foreground/30 bg-primary-foreground/10" : "border-accent bg-accent/10 text-foreground"}`}>
         <Package size={14} className={primary ? "text-accent" : "text-primary"}/>
         <span><b>{quota}</b> report{quota === 1 ? "" : "s"} included</span>
       </div>

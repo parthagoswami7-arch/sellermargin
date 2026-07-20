@@ -508,7 +508,8 @@ async def require_admin(user: dict = Depends(current_user)) -> dict:
 
 PLANS = {
     "trial_10": {"id": "trial_10", "days": 7,   "price_inr": 49,  "label": "7-Day Trial",   "amount": 0.65, "currency": "usd", "gst_pct": 18, "reports_quota": 1,  "available": True},
-    "annual":   {"id": "annual",   "days": 365, "price_inr": 499, "label": "1-Year Access", "amount": 6.0,  "currency": "usd", "gst_pct": 18, "reports_quota": 12, "available": True},
+    "annual":   {"id": "annual",   "days": 365, "price_inr": 499, "list_price_inr": 599, "label": "1-Year Access", "amount": 6.0,  "currency": "usd", "gst_pct": 18, "reports_quota": 12, "available": True, "discount_note": "Launch offer — save Rs.100"},
+    "topup_5":  {"id": "topup_5",  "days": 0,   "price_inr": 249, "label": "5 Extra Reports", "amount": 3.0,  "currency": "usd", "gst_pct": 18, "reports_quota": 5,  "available": True, "is_topup": True},
 }
 
 # Cards shown as "Coming soon" — not yet purchasable through Cashfree.
@@ -562,11 +563,15 @@ async def redeem_code(payload: RedeemReq, user: dict = Depends(current_user)):
         raise HTTPException(400, "Unknown plan on this code")
 
     fresh_user = await db.users.find_one({"user_id": user["user_id"]}, {"_id": 0})
-    new_expiry = _extend_paid_until(fresh_user.get("paid_until"), plan["days"])
+    set_update = {"last_paid_at": now_utc(), "last_plan": plan["id"]}
+    new_expiry = None
+    if int(plan.get("days") or 0) > 0:
+        new_expiry = _extend_paid_until(fresh_user.get("paid_until"), plan["days"])
+        set_update["is_paid"] = True
+        set_update["paid_until"] = new_expiry
     await db.users.update_one(
         {"user_id": user["user_id"]},
-        {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc(),
-                  "last_plan": plan["id"]},
+        {"$set": set_update,
          "$inc": {"reports_quota": int(plan.get("reports_quota") or 0)}},
     )
     await db.activation_codes.update_one(
@@ -574,8 +579,10 @@ async def redeem_code(payload: RedeemReq, user: dict = Depends(current_user)):
         {"$set": {"status": "used", "used_by": user["user_id"], "used_by_email": user.get("email"),
                   "used_at": now_utc()}},
     )
-    return {"ok": True, "plan": plan, "paid_until": new_expiry.isoformat(),
-            "reports_added": int(plan.get("reports_quota") or 0)}
+    return {"ok": True, "plan": plan,
+            "paid_until": (new_expiry.isoformat() if new_expiry else (fresh_user.get("paid_until").isoformat() if isinstance(fresh_user.get("paid_until"), datetime) else fresh_user.get("paid_until"))),
+            "reports_added": int(plan.get("reports_quota") or 0),
+            "is_topup": bool(plan.get("is_topup"))}
 
 
 # ---------------- admin: codes ----------------
@@ -747,10 +754,20 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
         "source": "cashfree", "order_id": order_id,
     })
     buyer = await db.users.find_one({"user_id": rec["user_id"]}, {"_id": 0})
-    new_expiry = _extend_paid_until(buyer.get("paid_until") if buyer else None, plan["days"])
+    set_update = {"last_paid_at": now_utc(), "last_plan": plan["id"]}
+    new_expiry = None
+    if int(plan.get("days") or 0) > 0:
+        new_expiry = _extend_paid_until(buyer.get("paid_until") if buyer else None, plan["days"])
+        set_update["is_paid"] = True
+        set_update["paid_until"] = new_expiry
+    else:
+        # Topups don't extend access — reuse whatever expiry the buyer already has (if any)
+        raw = buyer.get("paid_until") if buyer else None
+        if isinstance(raw, str):
+            raw = datetime.fromisoformat(raw)
+        new_expiry = raw
     await db.users.update_one({"user_id": rec["user_id"]},
-        {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc(),
-                  "last_plan": plan["id"]},
+        {"$set": set_update,
          "$inc": {"reports_quota": int(plan.get("reports_quota") or 0)}})
 
     # Always generate an invoice on successful payment (buyer can pick it up whether or not they
@@ -771,13 +788,17 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
                   "invoice_generated_at": now}})
 
     gst_total = rec.get("amount") or 0.0
+    expiry_iso_safe = new_expiry.isoformat() if new_expiry else ""
     await send_activation_email(
         to_email=rec["user_email"], code=code, plan_label=plan["label"],
-        days=plan["days"], site_url=PUBLIC_APP_URL, expiry_iso=new_expiry.isoformat(),
+        days=plan["days"], site_url=PUBLIC_APP_URL, expiry_iso=expiry_iso_safe,
         invoice_url=invoice_url, invoice_no=invoice_no, gst_total=float(gst_total),
     )
-    return {"status": "PAID", "code": code, "paid": True, "paid_until": new_expiry.isoformat(),
-            "invoice_no": invoice_no, "invoice_url": invoice_url}
+    return {"status": "PAID", "code": code, "paid": True,
+            "paid_until": (new_expiry.isoformat() if new_expiry else None),
+            "invoice_no": invoice_no, "invoice_url": invoice_url,
+            "reports_added": int(plan.get("reports_quota") or 0),
+            "is_topup": bool(plan.get("is_topup"))}
 
 @api.get("/payments/cf/verify/{order_id}")
 async def cf_verify(order_id: str, user: dict = Depends(current_user)):

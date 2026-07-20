@@ -113,17 +113,23 @@ export default function NewReport() {
               <>
                 <b>Report quota exhausted</b> — {status.reports_used} of {status.reports_quota} used.
                 <div className="text-xs text-muted-foreground mt-1">
-                  Buy a plan to add more reports, or pick a month you've already reconciled (regeneration is free).
+                  Buy a top-up or a plan below — or pick a month you've already reconciled (regeneration is free).
                 </div>
-                <button onClick={() => nav("/upgrade")} className="btn-outline text-xs mt-3" data-testid="quota-upgrade-btn">
-                  Buy more reports
-                </button>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <button onClick={() => nav("/upgrade?highlight=topup")} className="bg-accent text-accent-foreground px-4 py-2 text-xs uppercase tracking-[0.15em] font-bold hover:brightness-95" data-testid="quota-topup-btn">
+                    Buy 5 top-up reports · ₹249
+                  </button>
+                  <button onClick={() => nav("/upgrade")} className="btn-outline text-xs" data-testid="quota-upgrade-btn">
+                    Buy annual · ₹499
+                  </button>
+                </div>
               </>
             ) : (
               <>
                 <b>{status.reports_remaining} of {status.reports_quota} reports remaining.</b> This new month will consume 1 slot.
                 <div className="text-xs text-muted-foreground mt-1">
                   1 report = one calendar month's P&amp;L. Regenerating an existing month is always free.
+                  {status.reports_remaining <= 2 && <> · Running low? <button onClick={() => nav("/upgrade?highlight=topup")} className="text-primary underline font-medium" data-testid="quota-topup-inline-link">Top up with 5 reports for ₹249</button></>}
                 </div>
               </>
             )}

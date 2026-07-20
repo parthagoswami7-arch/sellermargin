@@ -110,7 +110,7 @@ export default function Landing() {
             <div className="mt-10 flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-muted-foreground">
               <div className="flex items-center gap-2"><ShieldCheck size={14}/> No credit card</div>
               <div className="flex items-center gap-2"><Sparkles size={14}/> Auto-detects file types</div>
-              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹49 · 7-day · 1 report &nbsp;·&nbsp; ₹499 · 1-year · 12 reports</div>
+              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹49 · 7-day · 1 report &nbsp;·&nbsp; <span className="line-through opacity-70">₹599</span> <b className="text-accent">₹499</b> · 1-year · 12 reports</div>
             </div>
           </div>
 
@@ -245,13 +245,16 @@ export default function Landing() {
                 {user ? "Buy 7-day access" : "Sign in to buy"}
               </button>
             </div>
-            <div className="p-10 bg-primary text-primary-foreground border-b md:border-b-0 md:border-r border-primary-foreground/10">
+            <div className="p-10 bg-primary text-primary-foreground border-b md:border-b-0 md:border-r border-primary-foreground/10 relative">
+              <div className="absolute top-3 right-3 bg-accent text-accent-foreground text-[10px] uppercase tracking-[0.15em] font-bold px-2 py-1" data-testid="fomo-badge-annual">Save ₹100</div>
               <div className="label-caps mb-4 opacity-80">Annual · best value</div>
-              <div className="flex items-baseline gap-2 mb-1">
+              <div className="flex items-baseline gap-3 mb-1">
                 <div className="font-serif text-5xl">₹499</div>
+                <div className="text-lg line-through opacity-60 font-serif" data-testid="strikethrough-599">₹599</div>
                 <div className="opacity-70 text-sm">+ 18% GST</div>
               </div>
-              <p className="text-xs uppercase tracking-[0.15em] opacity-70 mb-4 font-mono">≈ ₹588.82 all-in · about ₹49/month</p>
+              <p className="text-xs uppercase tracking-[0.15em] opacity-70 mb-1 font-mono">≈ ₹588.82 all-in · about ₹49/month</p>
+              <p className="text-[11px] uppercase tracking-[0.15em] text-accent font-bold mb-4">⚡ Launch offer · limited time</p>
               <div className="border border-accent bg-accent/20 px-3 py-2 mb-6 text-sm">
                 <b>12 reports</b> included · one per calendar month
               </div>

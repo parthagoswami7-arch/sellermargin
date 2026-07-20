@@ -1,0 +1,25 @@
+{
+  "summary": "Backend-only testing of new topup_5 plan + annual launch-offer discount fields. Created /app/backend/tests/test_topup_and_discount.py with 12 tests covering plan exposure, Cashfree GST math for topup (intra + inter state), topup quota semantics (paid_until NOT extended), admin code generation, redemption for topup (paid_until unchanged for paid + null user), and annual regression (365d extension + 12 reports). ALL 12 TESTS PASSED.",
+  "backend_issues": { "critical": [], "minor": [] },
+  "frontend_issues": { "ui_bugs": [], "integration_issues": [], "design_issues": [] },
+  "test_report_links": [
+    "/app/backend/tests/test_topup_and_discount.py",
+    "/app/test_reports/pytest/topup_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 1088 lines — approaching the 700-line split threshold; consider splitting payments/codes/reports into separate routers.",
+    "PLANS dict is a module-level constant — fine for now, but list_price_inr / discount_note are hard-coded; consider moving marketing copy into settings collection so admin can edit without redeploy.",
+    "_fulfill_order_if_paid handles topup by keeping buyer.paid_until, but if paid_until is stored as a string in Mongo (older users), the datetime.fromisoformat conversion is fine; verified via test_redeem_topup_when_never_paid_keeps_paid_until_null."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_topup_and_discount.py"
+  ],
+  "success_rate": { "backend": "100%", "frontend": "n/a (backend-only)" },
+  "test_credentials": "Seeded via mongosh recipe from /app/memory/test_credentials.md — users: test-topup-user-1 (paid 90d, quota 12), test-topup-user-2 (unpaid), test-topup-admin-1 (admin). All seed users + codes + cf_orders cleaned after run.",
+  "seed_data_creation": "Ephemeral test users test-topup-user-1/2, test-topup-admin-1, plus per-test throwaway users test-topup-user-never-paid, test-annual-regression-1. All deleted at end of run.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "topup_5 plan is fully verified. If re-running test_topup_and_discount.py, first re-seed users via the mongosh block (see credentials). Tests are safe to re-run repeatedly — cleanup is done post-run in this iteration. If pytest-xdist is enabled (it is via pytest.ini), do NOT put teardown_module hooks in tests since loadscope runs per-worker and can wipe shared sessions mid-run.",
+  "rca of the issue": "N/A — no issues found. All acceptance criteria satisfied: plans list_price_inr/discount_note/is_topup present; GST math for ₹249 base gives cgst=sgst=22.41 (intra MH) and igst=44.82 (inter KA), total=₹293.82; topup redemption/fulfillment adds 5 reports without touching paid_until; annual regression still extends 365d and adds 12 reports."
+}
