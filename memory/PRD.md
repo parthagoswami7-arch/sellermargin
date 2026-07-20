@@ -67,6 +67,13 @@ Amazon sellers spend hours every month reconciling six raw reports from Seller C
 - Aligned `trial_end` calculation with `PLANS['trial_10'].days`; new users seeded with `reports_quota: 0` explicitly; compound index added on `(user_id, target_month, target_year)`
 - Backend tests: 12/12 (iteration_5.json)
 
+## Implemented (2026-02-27 later) — Top-up plan + FOMO discount
+- New **top-up plan** `topup_5`: ₹249 + 18% GST · 5 extra reports · `days: 0` (does NOT extend `paid_until`)
+- Purchase flow: `_fulfill_order_if_paid` and `redeem_code` conditionally set `paid_until` only when `plan["days"] > 0`; topups only `$inc reports_quota` on the user doc
+- Cashfree order + GST + email + tax-invoice link all work identically for topup (buyer still gets a proper GST invoice)
+- **FOMO on Annual (₹499)**: added `list_price_inr: 599` + `discount_note` to the plan. Landing + Upgrade cards render `₹499` next to a strikethrough `₹599`, a "Save ₹100" corner badge, and "⚡ LAUNCH OFFER · LIMITED TIME" caption
+- New "Buy 5 top-up (₹249)" contextual CTA on `NewReport` quota banner when user is running low or exhausted; also on Upgrade page as a highlighted strip below the plan cards (respects `?highlight=topup` query param)
+
 ## Roadmap / Backlog
 - P0: Multi-month comparison chart (currently only per-month)
 - P0: Razorpay INR alternative (Stripe India not supported by claimable sandbox)
