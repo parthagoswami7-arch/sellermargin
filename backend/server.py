@@ -93,6 +93,45 @@ def user_status(user: dict) -> dict:
         "is_admin": bool(user.get("is_admin")),
     }
 
+
+# --- report-quota helpers ---
+async def _distinct_months_used(user_id: str) -> int:
+    """Return the count of DISTINCT (target_month, target_year) tuples for this user's reports.
+    Deleting a report frees up its slot naturally (nothing to increment/decrement)."""
+    pipeline = [
+        {"$match": {"user_id": user_id}},
+        {"$group": {"_id": {"m": "$target_month", "y": "$target_year"}}},
+        {"$count": "n"},
+    ]
+    async for row in db.reports.aggregate(pipeline):
+        return int(row.get("n", 0))
+    return 0
+
+
+async def _has_month_report(user_id: str, m: int, y: int) -> bool:
+    return (await db.reports.find_one(
+        {"user_id": user_id, "target_month": m, "target_year": y},
+        {"_id": 1},
+    )) is not None
+
+
+async def with_quota(user: dict) -> dict:
+    """Merge report-quota fields into a user_status() dict. Admins get infinite quota."""
+    st = user_status(user)
+    used = await _distinct_months_used(user["user_id"])
+    if user.get("is_admin"):
+        st["reports_used"] = used
+        st["reports_quota"] = 9999
+        st["reports_remaining"] = 9999
+        st["reports_unlimited"] = True
+    else:
+        quota = int(user.get("reports_quota") or 0)
+        st["reports_used"] = used
+        st["reports_quota"] = quota
+        st["reports_remaining"] = max(0, quota - used)
+        st["reports_unlimited"] = False
+    return st
+
 # ---------------- auth ----------------
 @api.get("/")
 async def root():
@@ -159,11 +198,11 @@ async def create_session(payload: SessionRequest, response: Response):
         max_age=7 * 24 * 60 * 60,
     )
     user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    return {**user, "status": user_status(user)}
+    return {**user, "status": await with_quota(user)}
 
 @api.get("/auth/me")
 async def me(user: dict = Depends(current_user)):
-    return {**user, "status": user_status(user)}
+    return {**user, "status": await with_quota(user)}
 
 @api.post("/auth/logout")
 async def logout(request: Request, response: Response):
@@ -251,6 +290,18 @@ class CreateReport(BaseModel):
 
 @api.post("/reports")
 async def create_report(payload: CreateReport, user: dict = Depends(current_user)):
+    # Enforce report quota per plan (admins bypass, regenerating same month bypasses)
+    if not user.get("is_admin"):
+        existing = await _has_month_report(user["user_id"], payload.target_month, payload.target_year)
+        if not existing:
+            used = await _distinct_months_used(user["user_id"])
+            quota = int(user.get("reports_quota") or 0)
+            if used >= quota:
+                raise HTTPException(
+                    status_code=402,
+                    detail=(f"Report quota exhausted ({used}/{quota}). "
+                            "Buy or renew a plan to get more reports. Existing months can still be re-generated for free."),
+                )
     rid = gen_id("rep")
     doc = {
         "report_id": rid,
@@ -455,8 +506,16 @@ async def require_admin(user: dict = Depends(current_user)) -> dict:
     return user
 
 PLANS = {
-    "trial_10": {"id": "trial_10", "days": 10,  "price_inr": 49,  "label": "10-Day Trial",   "amount": 0.65, "currency": "usd", "gst_pct": 18},
-    "annual":   {"id": "annual",   "days": 365, "price_inr": 499, "label": "1-Year Access",  "amount": 6.0,  "currency": "usd", "gst_pct": 18},
+    "trial_10": {"id": "trial_10", "days": 7,   "price_inr": 49,  "label": "7-Day Trial",   "amount": 0.65, "currency": "usd", "gst_pct": 18, "reports_quota": 1,  "available": True},
+    "annual":   {"id": "annual",   "days": 365, "price_inr": 499, "label": "1-Year Access", "amount": 6.0,  "currency": "usd", "gst_pct": 18, "reports_quota": 12, "available": True},
+}
+
+# Cards shown as "Coming soon" — not yet purchasable through Cashfree.
+UPCOMING_PLANS = {
+    "agency_starter": {"id": "agency_starter", "days": 365, "price_inr": 1999,
+                       "label": "Agency Starter", "gst_pct": 18, "reports_quota": 60,
+                       "available": False, "note": "Coming soon",
+                       "tagline": "For accountants & agencies handling multiple sellers"},
 }
 
 # ---------------- payments (Flow B, one-time yearly) ----------------
@@ -506,14 +565,16 @@ async def redeem_code(payload: RedeemReq, user: dict = Depends(current_user)):
     await db.users.update_one(
         {"user_id": user["user_id"]},
         {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc(),
-                  "last_plan": plan["id"]}},
+                  "last_plan": plan["id"]},
+         "$inc": {"reports_quota": int(plan.get("reports_quota") or 0)}},
     )
     await db.activation_codes.update_one(
         {"code": code},
         {"$set": {"status": "used", "used_by": user["user_id"], "used_by_email": user.get("email"),
                   "used_at": now_utc()}},
     )
-    return {"ok": True, "plan": plan, "paid_until": new_expiry.isoformat()}
+    return {"ok": True, "plan": plan, "paid_until": new_expiry.isoformat(),
+            "reports_added": int(plan.get("reports_quota") or 0)}
 
 
 # ---------------- admin: codes ----------------
@@ -554,7 +615,7 @@ async def admin_list_codes(_: dict = Depends(require_admin)):
 
 @api.get("/plans")
 async def public_plans():
-    return {"plans": PLANS}
+    return {"plans": PLANS, "upcoming_plans": UPCOMING_PLANS}
 
 
 # ---------------- Cashfree checkout ----------------
@@ -688,7 +749,8 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
     new_expiry = _extend_paid_until(buyer.get("paid_until") if buyer else None, plan["days"])
     await db.users.update_one({"user_id": rec["user_id"]},
         {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc(),
-                  "last_plan": plan["id"]}})
+                  "last_plan": plan["id"]},
+         "$inc": {"reports_quota": int(plan.get("reports_quota") or 0)}})
 
     # Always generate an invoice on successful payment (buyer can pick it up whether or not they
     # provided GSTIN — unregistered buyers just get an invoice with "Unregistered" printed).
@@ -901,7 +963,8 @@ async def _mark_user_paid(user_id: str):
     new_expiry = _extend_paid_until(user.get("paid_until"), YEARLY_PACKAGE["days"])
     await db.users.update_one(
         {"user_id": user_id},
-        {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc()}},
+        {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc()},
+         "$inc": {"reports_quota": int(YEARLY_PACKAGE.get("reports_quota") or 0)}},
     )
 
 @api.get("/payments/status/{session_id}")

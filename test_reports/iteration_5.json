@@ -1,0 +1,36 @@
+{
+  "summary": "Backend tests for the per-user report-quota system. 12/12 pytest cases passed. Verified plans shape (trial_10, annual, upcoming agency_starter), fresh-user auth/me quota fields, 402 on quota=0, quota consumption on distinct (month,year), regeneration bypass (same month is free), delete frees the slot, quota exhaustion on new month, admin unlimited bypass, redeem annual code $inc +12 and trial_10 $inc +1, Cashfree order creation rejects 'agency_starter' with 400 Unknown plan, /admin/users includes reports_quota, and regression on /settings/seller GET + admin PUT.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "user_status()", "issue": "trial_end still computed with timedelta(days=15) (line 72) even though trial plan is now 7 days. Doesn't affect quota logic but is inconsistent with the new plan definition (PLANS['trial_10'].days=7). Consider aligning with plan days or gating trial_end via plan lookup."},
+      {"endpoint": "auth/session (signup)", "issue": "New users are seeded with trial_start=now() but NO reports_quota field. reports_quota is coerced to 0 via int(user.get('reports_quota') or 0) at read-time, which works today but leaves the doc missing the field until first $inc. Prefer explicit reports_quota:0 on insert for auditability."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_quota.py",
+    "/app/test_reports/pytest/quota_results.xml"
+  ],
+  "action_items": [
+    "Optional: align trial_end calculation in user_status() with PLANS['trial_10'].days (currently hardcoded to 15 days).",
+    "Optional: set reports_quota:0 explicitly at user creation for schema consistency."
+  ],
+  "critical_code_review_comments": [
+    "server.py is 1065 lines — nearing the >700-line threshold for splitting into modules (auth, reports, plans/codes, payments, admin).",
+    "_distinct_months_used() correctly uses aggregation but is called twice per create (via _has_month_report + _distinct_months_used); minor N+1 but acceptable for current scale.",
+    "Redeem/cashfree/_mark_user_paid all use $inc reports_quota — good for carry-forward semantics. But if a user's doc lacks reports_quota, $inc will create it; fine with MongoDB semantics.",
+    "Admin /admin/users returns full user docs — no PII filtering (emails, picture URLs exposed). Acceptable for admin-only endpoint but worth noting.",
+    "No index on reports.(user_id, target_month, target_year) — _has_month_report and _distinct_months_used aggregation would benefit from a compound index. Existing index is (user_id, created_at)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_quota.py (new)"
+  ],
+  "success_rate": {"backend": "100% (12/12)", "frontend": "N/A"},
+  "test_credentials": "Injected test sessions directly via mongosh-style pymongo inserts using the recipe in /app/memory/test_credentials.md. All test users and their reports/sessions/activation_codes are cleaned up after each test via fixtures.",
+  "seed_data_creation": "Ephemeral: each test creates a scoped test-user (prefix test-quota-<uuid>) with a bearer session token and, where needed, activation codes. All cleaned up in teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Quota system is fully wired: PLANS/UPCOMING_PLANS at server.py:508-519, with_quota() at 118-133, create_report guard at 291-304, redeem $inc at 569, cashfree fulfill $inc at 753, stripe _mark_user_paid $inc at 967. All backend paths tested. If UI changes later, test the pricing page (Agency Starter should show 'Coming soon', trial+annual purchasable), the report create button (should surface 402 message), and the account panel (should display reports_remaining/quota).",
+  "rca of the issue": "N/A — no bugs found in the new quota feature."
+}

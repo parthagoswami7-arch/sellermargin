@@ -199,12 +199,15 @@ export default function Admin() {
           <div className="max-h-[500px] overflow-auto">
             {users.map(u => (
               <div key={u.user_id} className="p-4 border-b border-border last:border-b-0 text-sm">
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
                     <div className="font-medium truncate">{u.name || u.email}</div>
                     <div className="text-xs text-muted-foreground truncate">{u.email}</div>
                     {u.paid_until && (
                       <div className="text-[10px] font-mono text-muted-foreground mt-0.5">expires {new Date(u.paid_until).toLocaleDateString("en-IN")}</div>
+                    )}
+                    {u.reports_quota !== undefined && (
+                      <div className="text-[10px] font-mono text-primary mt-0.5" data-testid={`quota-${u.user_id}`}>quota: {u.reports_quota || 0} reports</div>
                     )}
                   </div>
                   <span className={`text-[10px] uppercase tracking-[0.15em] font-bold px-2 py-0.5 border ${u.is_paid ? "border-primary text-primary" : "border-muted-foreground text-muted-foreground"}`}>

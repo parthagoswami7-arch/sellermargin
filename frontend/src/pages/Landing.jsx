@@ -110,7 +110,7 @@ export default function Landing() {
             <div className="mt-10 flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-muted-foreground">
               <div className="flex items-center gap-2"><ShieldCheck size={14}/> No credit card</div>
               <div className="flex items-center gap-2"><Sparkles size={14}/> Auto-detects file types</div>
-              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹49 + 18% GST · ₹499 + 18% GST</div>
+              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹49 · 7-day · 1 report &nbsp;·&nbsp; ₹499 · 1-year · 12 reports</div>
             </div>
           </div>
 
@@ -224,36 +224,72 @@ export default function Landing() {
             <div className="label-caps mb-4">Pricing</div>
             <h2 className="font-serif text-4xl sm:text-5xl tracking-tight">Fair pricing. Real tax invoice.</h2>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border border-border">
-            <div className="p-12 bg-card border-r border-border">
-              <div className="label-caps mb-4">10-day access</div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-border">
+            <div className="p-10 bg-card border-b md:border-b-0 md:border-r border-border">
+              <div className="label-caps mb-4">7-day access</div>
               <div className="flex items-baseline gap-2 mb-1">
-                <div className="font-serif text-6xl">₹49</div>
+                <div className="font-serif text-5xl">₹49</div>
                 <div className="text-sm text-muted-foreground">+ 18% GST</div>
               </div>
-              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground mb-6 font-mono">≈ ₹57.82 all-in</p>
-              <p className="text-muted-foreground mb-8">Perfect to reconcile your first month. Everything included.</p>
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground mb-4 font-mono">≈ ₹57.82 all-in</p>
+              <div className="border border-accent bg-accent/10 px-3 py-2 mb-6 text-sm">
+                <b>1 report</b> included · try one month
+              </div>
+              <ul className="space-y-2 text-sm mb-8">
+                <li className="flex gap-3"><TrendingUp size={14} className="text-primary shrink-0 mt-1"/>Reconcile any 1 target month</li>
+                <li className="flex gap-3"><TrendingUp size={14} className="text-primary shrink-0 mt-1"/>Excel + PDF exports</li>
+                <li className="flex gap-3"><TrendingUp size={14} className="text-primary shrink-0 mt-1"/>Free re-generation of same month</li>
+              </ul>
               <button onClick={user ? () => nav("/upgrade") : loginWithGoogle}
                 className="btn-outline w-full" data-testid="cta-pricing-trial">
-                {user ? "Buy 10-day access" : "Sign in to buy"}
+                {user ? "Buy 7-day access" : "Sign in to buy"}
               </button>
             </div>
-            <div className="p-12 bg-primary text-primary-foreground">
-              <div className="label-caps mb-4 opacity-80">Annual access</div>
+            <div className="p-10 bg-primary text-primary-foreground border-b md:border-b-0 md:border-r border-primary-foreground/10">
+              <div className="label-caps mb-4 opacity-80">Annual · best value</div>
               <div className="flex items-baseline gap-2 mb-1">
-                <div className="font-serif text-6xl">₹499</div>
+                <div className="font-serif text-5xl">₹499</div>
                 <div className="opacity-70 text-sm">+ 18% GST</div>
               </div>
-              <p className="text-xs uppercase tracking-[0.15em] opacity-70 mb-6 font-mono">≈ ₹588.82 all-in · about ₹49/month</p>
-              <p className="opacity-80 mb-8">One payment. 365 days of full access. Renew when it expires — no auto-charge.</p>
+              <p className="text-xs uppercase tracking-[0.15em] opacity-70 mb-4 font-mono">≈ ₹588.82 all-in · about ₹49/month</p>
+              <div className="border border-accent bg-accent/20 px-3 py-2 mb-6 text-sm">
+                <b>12 reports</b> included · one per calendar month
+              </div>
+              <ul className="space-y-2 text-sm mb-8 opacity-90">
+                <li className="flex gap-3"><TrendingUp size={14} className="text-accent shrink-0 mt-1"/>Reconcile all 12 months in the year</li>
+                <li className="flex gap-3"><TrendingUp size={14} className="text-accent shrink-0 mt-1"/>Unused reports carry forward on renewal</li>
+                <li className="flex gap-3"><TrendingUp size={14} className="text-accent shrink-0 mt-1"/>Free re-generation of any past month</li>
+              </ul>
               <button onClick={user ? () => nav("/upgrade") : loginWithGoogle}
                 className="bg-accent text-accent-foreground w-full py-3 font-medium text-sm uppercase tracking-[0.15em] hover:brightness-95"
                 data-testid="cta-pricing-lifetime">
                 Get annual access
               </button>
             </div>
+            <div className="p-10 bg-card relative">
+              <div className="absolute top-3 right-3 bg-accent text-accent-foreground text-[10px] uppercase tracking-[0.15em] font-bold px-2 py-1">Coming soon</div>
+              <div className="label-caps mb-4">Agency Starter</div>
+              <div className="flex items-baseline gap-2 mb-1">
+                <div className="font-serif text-5xl">₹1,999</div>
+                <div className="text-sm text-muted-foreground">+ 18% GST</div>
+              </div>
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground mb-4 font-mono">≈ ₹2,358.82 all-in · about ₹33/report</p>
+              <div className="border border-border bg-muted/40 px-3 py-2 mb-6 text-sm">
+                <b>60 reports</b> · handle 5 sellers × 12 months
+              </div>
+              <ul className="space-y-2 text-sm mb-8">
+                <li className="flex gap-3"><TrendingUp size={14} className="text-primary shrink-0 mt-1"/>Perfect for CAs & agencies</li>
+                <li className="flex gap-3"><TrendingUp size={14} className="text-primary shrink-0 mt-1"/>Team-friendly report library</li>
+                <li className="flex gap-3"><TrendingUp size={14} className="text-primary shrink-0 mt-1"/>Priority WhatsApp support</li>
+              </ul>
+              <a href={whatsappLink("Hi, I'm interested in the Agency Starter plan (60 reports/year). Please let me know when it launches — my agency handles multiple sellers.")}
+                target="_blank" rel="noreferrer noopener"
+                className="btn-outline w-full text-center block" data-testid="cta-agency-notify">
+                Notify me on WhatsApp
+              </a>
+            </div>
           </div>
-          <p className="text-xs text-muted-foreground mt-4">GST-compliant tax invoice with your GSTIN can be issued on request at checkout.</p>
+          <p className="text-xs text-muted-foreground mt-4">1 report = one calendar month's P&amp;L. Regenerating the same month is free. Unused reports carry forward when you renew.</p>
         </div>
       </section>
 

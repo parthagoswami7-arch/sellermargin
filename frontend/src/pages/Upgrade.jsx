@@ -1,11 +1,10 @@
 import React, { useState, useEffect } from "react";
 import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
-import { Check, Sparkles, Ticket, Zap, FileText, ChevronDown } from "lucide-react";
+import { Check, Sparkles, Ticket, Zap, FileText, ChevronDown, Package } from "lucide-react";
 import { toast } from "sonner";
 import { load as loadCashfree } from "@cashfreepayments/cashfree-js";
-
-const GST_PCT = 18;
+import { whatsappLink } from "../components/WhatsAppFab";
 
 function computeGst(basePrice, buyerState, sellerState) {
   const base = Number(basePrice) || 0;
@@ -23,22 +22,21 @@ function computeGst(basePrice, buyerState, sellerState) {
 export default function Upgrade() {
   const { user, refresh } = useAuth();
   const [plans, setPlans] = useState({});
+  const [upcoming, setUpcoming] = useState({});
   const [code, setCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [payingPlan, setPayingPlan] = useState(null);
 
-  // Seller (from backend settings) — used for intra/inter-state GST logic
   const [seller, setSeller] = useState({ state: "Maharashtra", business_name: "" });
   const [states, setStates] = useState([]);
 
-  // GST invoice form (optional)
   const [wantsInvoice, setWantsInvoice] = useState(false);
   const [gForm, setGForm] = useState({
     buyer_name: "", buyer_gstin: "", buyer_billing_address: "", buyer_state: "",
   });
 
   useEffect(() => {
-    api.get("/plans").then(r => setPlans(r.data.plans || {}));
+    api.get("/plans").then(r => { setPlans(r.data.plans || {}); setUpcoming(r.data.upcoming_plans || {}); });
     api.get("/settings/seller").then(r => setSeller(r.data.seller || {})).catch(() => {});
     api.get("/settings/india-states").then(r => setStates(r.data.states || [])).catch(() => {});
   }, []);
@@ -49,15 +47,15 @@ export default function Upgrade() {
     setBusy(true);
     try {
       const r = await api.post("/codes/redeem", { code: clean });
-      toast.success(`Unlocked ${r.data.plan.label} — expires ${new Date(r.data.paid_until).toLocaleDateString("en-IN")}`);
+      const added = r.data.reports_added || 0;
+      toast.success(`Unlocked ${r.data.plan.label} — +${added} report${added === 1 ? "" : "s"} added, expires ${new Date(r.data.paid_until).toLocaleDateString("en-IN")}`);
       setCode(""); await refresh();
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Redeem failed");
     } finally { setBusy(false); }
   };
 
-  const buy = async (planId, planBase) => {
-    // Client-side validation only when the buyer opted in for a GST invoice
+  const buy = async (planId) => {
     if (wantsInvoice) {
       if (!gForm.buyer_name.trim()) return toast.error("Business/individual name is required for a GST invoice");
       if (!gForm.buyer_state) return toast.error("Please pick your state (for CGST/SGST vs IGST)");
@@ -77,7 +75,7 @@ export default function Upgrade() {
       await cashfree.checkout({ paymentSessionId: r.data.payment_session_id, redirectTarget: "_modal" });
       const v = await api.get(`/payments/cf/verify/${r.data.order_id}`);
       if (v.data.paid) {
-        toast.success("Payment successful — activation email + tax invoice sent!");
+        toast.success("Payment successful — reports added + activation email sent!");
         await refresh();
       } else {
         toast.error(`Payment status: ${v.data.status || "pending"}`);
@@ -91,18 +89,39 @@ export default function Upgrade() {
   const paidActive = status?.is_paid;
   const trial = plans.trial_10;
   const annual = plans.annual;
+  const agency = upcoming.agency_starter;
   const trialGst  = trial  ? computeGst(trial.price_inr,  gForm.buyer_state, seller.state) : null;
   const annualGst = annual ? computeGst(annual.price_inr, gForm.buyer_state, seller.state) : null;
 
   return (
-    <div className="p-10 max-w-4xl">
+    <div className="p-10 max-w-6xl">
       <div className="label-caps mb-2">Activation</div>
       <h1 className="font-serif text-5xl tracking-tight mb-4">
         {paidActive ? "Extend your access" : "Unlock Seller Margin"}
       </h1>
       <p className="text-muted-foreground mb-10 max-w-2xl">
-        Pay online via UPI / card / netbanking and get instant access — an activation code and a GST-compliant tax invoice are emailed to you.
+        Pay online via UPI / card / netbanking. You get instant access, a GST tax invoice, and an activation code emailed to you.
       </p>
+
+      {/* Current usage — appears only when user is logged in and status is available */}
+      {status && !status.reports_unlimited && (
+        <div className="border border-border bg-card p-6 mb-10 flex flex-wrap items-center gap-6" data-testid="reports-usage">
+          <div className="flex items-center gap-3">
+            <Package size={20} className="text-primary"/>
+            <div>
+              <div className="text-2xl font-serif tabular-nums">
+                <span className={status.reports_remaining === 0 ? "text-destructive" : ""}>{status.reports_remaining}</span>
+                <span className="text-muted-foreground text-lg"> / {status.reports_quota}</span>
+              </div>
+              <div className="text-[10px] uppercase tracking-[0.2em] text-muted-foreground">Reports remaining</div>
+            </div>
+          </div>
+          <div className="border-l border-border pl-6">
+            <div className="text-sm text-muted-foreground">Used {status.reports_used} · Quota {status.reports_quota}</div>
+            <div className="text-xs text-muted-foreground mt-1">1 report = one calendar month · regenerating the same month is free</div>
+          </div>
+        </div>
+      )}
 
       {paidActive && (
         <div className="border border-primary bg-primary/5 p-6 mb-8 flex items-center gap-4" data-testid="paid-active-banner">
@@ -167,25 +186,18 @@ export default function Upgrade() {
         )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border border-border mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-border mb-10">
         {trial && (
-          <PlanCard
-            title="Short trial" muted
-            plan={trial} gst={trialGst}
-            payingPlan={payingPlan}
-            onBuy={() => buy("trial_10", trial.price_inr)}
-            testid="buy-trial-btn"
-          />
+          <PlanCard title="7-day trial" plan={trial} gst={trialGst}
+            payingPlan={payingPlan} onBuy={() => buy("trial_10")}
+            testid="buy-trial-btn"/>
         )}
         {annual && (
-          <PlanCard
-            title="Best value" primary
-            plan={annual} gst={annualGst}
-            payingPlan={payingPlan}
-            onBuy={() => buy("annual", annual.price_inr)}
-            testid="buy-annual-btn"
-          />
+          <PlanCard title="Best value" primary plan={annual} gst={annualGst}
+            payingPlan={payingPlan} onBuy={() => buy("annual")}
+            testid="buy-annual-btn"/>
         )}
+        {agency && <AgencyComingSoonCard plan={agency}/>}
       </div>
 
       <div className="border border-border bg-card p-8">
@@ -204,10 +216,11 @@ export default function Upgrade() {
   );
 }
 
-function PlanCard({ title, muted, primary, plan, gst, payingPlan, onBuy, testid }) {
+function PlanCard({ title, primary, plan, gst, payingPlan, onBuy, testid }) {
   const isPaying = payingPlan === plan.id;
   const anyPaying = payingPlan !== null;
   const rupee = (v) => `₹${Number(v).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const quota = plan.reports_quota || 0;
 
   return (
     <div className={`p-10 ${primary ? "bg-primary text-primary-foreground" : "bg-card border-b md:border-b-0 md:border-r border-border"}`}>
@@ -216,8 +229,14 @@ function PlanCard({ title, muted, primary, plan, gst, payingPlan, onBuy, testid 
         <div className="font-serif text-5xl">₹{plan.price_inr}</div>
         <div className={`text-sm ${primary ? "opacity-70" : "text-muted-foreground"}`}>+ 18% GST</div>
       </div>
-      <div className={`text-xs mb-6 ${primary ? "opacity-70" : "text-muted-foreground"}`}>
+      <div className={`text-xs mb-4 ${primary ? "opacity-70" : "text-muted-foreground"}`}>
         for {plan.days} days
+      </div>
+
+      {/* Report quota chip */}
+      <div className={`flex items-center gap-2 mb-6 px-3 py-2 text-sm border ${primary ? "border-primary-foreground/30 bg-primary-foreground/10" : "border-accent bg-accent/10 text-foreground"}`}>
+        <Package size={14} className={primary ? "text-accent" : "text-primary"}/>
+        <span><b>{quota}</b> report{quota === 1 ? "" : "s"} included</span>
       </div>
 
       {/* GST breakdown */}
@@ -235,9 +254,9 @@ function PlanCard({ title, muted, primary, plan, gst, payingPlan, onBuy, testid 
       )}
 
       <ul className="space-y-2 text-sm mb-8">
-        <li className="flex gap-3"><Check size={14} className={`shrink-0 mt-1 ${primary ? "text-accent" : "text-primary"}`}/>All P&amp;L features</li>
-        <li className="flex gap-3"><Check size={14} className={`shrink-0 mt-1 ${primary ? "text-accent" : "text-primary"}`}/>Excel + PDF exports</li>
-        <li className="flex gap-3"><Check size={14} className={`shrink-0 mt-1 ${primary ? "text-accent" : "text-primary"}`}/>SKU cost library</li>
+        <li className="flex gap-3"><Check size={14} className={`shrink-0 mt-1 ${primary ? "text-accent" : "text-primary"}`}/>Reconcile {quota} calendar month{quota === 1 ? "" : "s"}</li>
+        <li className="flex gap-3"><Check size={14} className={`shrink-0 mt-1 ${primary ? "text-accent" : "text-primary"}`}/>Free regeneration of same month</li>
+        <li className="flex gap-3"><Check size={14} className={`shrink-0 mt-1 ${primary ? "text-accent" : "text-primary"}`}/>Unused reports carry forward on renewal</li>
         <li className="flex gap-3"><Check size={14} className={`shrink-0 mt-1 ${primary ? "text-accent" : "text-primary"}`}/>GST tax invoice on email</li>
       </ul>
 
@@ -248,6 +267,35 @@ function PlanCard({ title, muted, primary, plan, gst, payingPlan, onBuy, testid 
         <Zap size={12} className="inline mr-2"/>
         {isPaying ? "Opening checkout…" : `Pay ${gst ? rupee(gst.total) : `₹${plan.price_inr}`}`}
       </button>
+    </div>
+  );
+}
+
+function AgencyComingSoonCard({ plan }) {
+  const total = +(plan.price_inr * 1.18).toFixed(2);
+  return (
+    <div className="p-10 bg-card relative" data-testid="agency-card">
+      <div className="absolute top-3 right-3 bg-accent text-accent-foreground text-[10px] uppercase tracking-[0.15em] font-bold px-2 py-1">Coming soon</div>
+      <div className="label-caps mb-4">{plan.label}</div>
+      <div className="flex items-baseline gap-2 mb-1">
+        <div className="font-serif text-5xl">₹{plan.price_inr.toLocaleString("en-IN")}</div>
+        <div className="text-sm text-muted-foreground">+ 18% GST</div>
+      </div>
+      <div className="text-xs mb-4 text-muted-foreground">≈ ₹{total.toLocaleString("en-IN")} all-in · about ₹{Math.round(plan.price_inr / plan.reports_quota)}/report</div>
+      <div className="flex items-center gap-2 mb-6 px-3 py-2 text-sm border border-border bg-muted/40">
+        <Package size={14} className="text-primary"/>
+        <span><b>{plan.reports_quota}</b> reports · 5 sellers × 12 months</span>
+      </div>
+      <ul className="space-y-2 text-sm mb-8 text-muted-foreground">
+        <li className="flex gap-3"><Check size={14} className="text-primary shrink-0 mt-1"/>{plan.tagline}</li>
+        <li className="flex gap-3"><Check size={14} className="text-primary shrink-0 mt-1"/>Priority WhatsApp support</li>
+        <li className="flex gap-3"><Check size={14} className="text-primary shrink-0 mt-1"/>Bulk import cost prices</li>
+      </ul>
+      <a href={whatsappLink(`Hi, I'm interested in the ${plan.label} plan (${plan.reports_quota} reports/year). Please let me know when it launches.`)}
+         target="_blank" rel="noreferrer noopener"
+         className="btn-outline w-full text-center block" data-testid="agency-notify-btn">
+        Notify me on WhatsApp
+      </a>
     </div>
   );
 }

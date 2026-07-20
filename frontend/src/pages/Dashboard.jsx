@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import api, { monthName, money } from "../lib/api";
-import { Plus, FileText, Trash2, TrendingUp, Clock } from "lucide-react";
+import { Plus, FileText, Trash2, TrendingUp, Clock, Package } from "lucide-react";
 import { toast } from "sonner";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, ResponsiveContainer, Legend, LineChart, Line } from "recharts";
+import { useAuth } from "../context/AuthContext";
 
 export default function Dashboard() {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
   const nav = useNavigate();
+  const { user } = useAuth();
+  const status = user?.status || {};
 
   const load = async () => {
     try {
@@ -47,7 +50,7 @@ export default function Dashboard() {
 
   return (
     <div className="p-10 max-w-[1400px]">
-      <div className="flex items-end justify-between mb-10">
+      <div className="flex items-end justify-between mb-6">
         <div>
           <div className="label-caps mb-2">Overview</div>
           <h1 className="font-serif text-5xl tracking-tight">Reports</h1>
@@ -56,6 +59,32 @@ export default function Dashboard() {
           <Plus size={16} className="inline mr-2" /> New report
         </Link>
       </div>
+
+      {/* Report-quota strip */}
+      {!status.reports_unlimited && status.reports_quota !== undefined && (
+        <div className="border border-border bg-card px-6 py-4 mb-8 flex flex-wrap items-center justify-between gap-4" data-testid="quota-strip">
+          <div className="flex items-center gap-4">
+            <Package size={18} className={status.reports_remaining === 0 ? "text-destructive" : "text-primary"}/>
+            <div>
+              <div className="text-sm">
+                <span className="font-serif text-2xl tabular-nums">
+                  <span className={status.reports_remaining === 0 ? "text-destructive" : ""}>{status.reports_remaining}</span>
+                  <span className="text-muted-foreground text-base"> / {status.reports_quota}</span>
+                </span>
+                <span className="text-xs uppercase tracking-[0.15em] text-muted-foreground ml-3">reports remaining</span>
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-0.5">
+                Used {status.reports_used} of {status.reports_quota}. Regenerating an existing month is free.
+              </div>
+            </div>
+          </div>
+          {status.reports_remaining <= 2 && (
+            <Link to="/upgrade" className="btn-outline text-xs" data-testid="quota-topup-link">
+              {status.reports_remaining === 0 ? "Buy more reports" : "Top up soon"}
+            </Link>
+          )}
+        </div>
+      )}
 
       {finalized.length > 0 && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border border-border mb-10">

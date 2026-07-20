@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api, { FILE_TYPE_ORDER, FILE_TYPE_LABELS, FILE_TYPE_LINKS, monthName } from "../lib/api";
-import { Upload, CheckCircle2, X, ArrowRight, FileText, ExternalLink, HelpCircle, Calendar, Image as ImageIcon, ChevronDown, ChevronRight } from "lucide-react";
+import { Upload, CheckCircle2, X, ArrowRight, FileText, ExternalLink, HelpCircle, Calendar, Image as ImageIcon, ChevronDown, ChevronRight, Package, AlertCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogFooter } from "../components/ui/dialog";
 import { toast } from "sonner";
+import { useAuth } from "../context/AuthContext";
 
 export default function NewReport() {
   const nav = useNavigate();
@@ -16,14 +17,36 @@ export default function NewReport() {
   const [uploading, setUploading] = useState(false);
   const [building, setBuilding] = useState(false);
   const [expanded, setExpanded] = useState({}); // ftype → bool
+  const [existingReports, setExistingReports] = useState([]);
+  const { user, refresh } = useAuth();
+  const status = user?.status || {};
+
+  useEffect(() => {
+    api.get("/reports")
+      .then(r => setExistingReports(r.data.reports || []))
+      .catch(() => {});
+  }, []);
+
+  const isRegeneration = existingReports.some(
+    r => Number(r.target_month) === Number(month) && Number(r.target_year) === Number(year)
+  );
+  const willConsumeSlot = !isRegeneration;
+  const quotaRemaining = status.reports_unlimited ? 9999 : (status.reports_remaining ?? 0);
+  const blocked = willConsumeSlot && quotaRemaining <= 0;
 
   const createReport = async () => {
     try {
       const r = await api.post("/reports", { name: name || undefined, target_month: Number(month), target_year: Number(year) });
       setReportId(r.data.report_id);
       toast.success("Report created — upload your files");
+      await refresh();
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Failed to create report");
+      const msg = e?.response?.data?.detail || "Failed to create report";
+      if (e?.response?.status === 402) {
+        toast.error(msg, { duration: 8000, action: { label: "Buy reports", onClick: () => nav("/upgrade") } });
+      } else {
+        toast.error(msg);
+      }
     }
   };
 
@@ -67,7 +90,46 @@ export default function NewReport() {
     <div className="p-10 max-w-[1200px]">
       <div className="label-caps mb-2">Step 1 of 4</div>
       <h1 className="font-serif text-5xl tracking-tight mb-2">New reconciliation</h1>
-      <p className="text-muted-foreground mb-10">Set the month, then drop in your six Amazon reports. We auto-detect each file.</p>
+      <p className="text-muted-foreground mb-6">Set the month, then drop in your five Amazon reports. We auto-detect each file.</p>
+
+      {/* Report-quota banner */}
+      {!reportId && status.reports_quota !== undefined && !status.reports_unlimited && (
+        <div className={`border p-4 mb-6 flex items-start gap-3 ${
+          blocked ? "border-destructive bg-destructive/5" :
+          isRegeneration ? "border-primary bg-primary/5" :
+          quotaRemaining <= 2 ? "border-accent bg-accent/10" : "border-border bg-card"
+        }`} data-testid="new-report-quota-banner">
+          {blocked ? <AlertCircle size={18} className="text-destructive shrink-0 mt-0.5"/>
+                  : <Package size={18} className="text-primary shrink-0 mt-0.5"/>}
+          <div className="flex-1 text-sm">
+            {isRegeneration ? (
+              <>
+                <b>Regenerating {monthName(Number(month))} {year}</b> — this is FREE and won't count against your quota.
+                <div className="text-xs text-muted-foreground mt-1">
+                  You already have a report for this month. Continuing will let you re-upload files or adjust cost prices without spending a report.
+                </div>
+              </>
+            ) : blocked ? (
+              <>
+                <b>Report quota exhausted</b> — {status.reports_used} of {status.reports_quota} used.
+                <div className="text-xs text-muted-foreground mt-1">
+                  Buy a plan to add more reports, or pick a month you've already reconciled (regeneration is free).
+                </div>
+                <button onClick={() => nav("/upgrade")} className="btn-outline text-xs mt-3" data-testid="quota-upgrade-btn">
+                  Buy more reports
+                </button>
+              </>
+            ) : (
+              <>
+                <b>{status.reports_remaining} of {status.reports_quota} reports remaining.</b> This new month will consume 1 slot.
+                <div className="text-xs text-muted-foreground mt-1">
+                  1 report = one calendar month's P&amp;L. Regenerating an existing month is always free.
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Month/year */}
       <div className="border border-border bg-card p-8 mb-8">
@@ -94,8 +156,9 @@ export default function NewReport() {
           </div>
         </div>
         {!reportId && (
-          <button onClick={createReport} className="btn-emerald mt-6" data-testid="create-report-btn">
-            Continue to uploads <ArrowRight size={14} className="inline ml-2" />
+          <button onClick={createReport} disabled={blocked} className="btn-emerald mt-6 disabled:opacity-50 disabled:cursor-not-allowed" data-testid="create-report-btn">
+            {blocked ? "Quota exhausted" : (isRegeneration ? "Regenerate this month (free)" : "Continue to uploads")}
+            {!blocked && <ArrowRight size={14} className="inline ml-2" />}
           </button>
         )}
       </div>
