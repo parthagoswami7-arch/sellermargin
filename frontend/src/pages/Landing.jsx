@@ -108,7 +108,7 @@ export default function Landing() {
             <div className="mt-10 flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-muted-foreground">
               <div className="flex items-center gap-2"><ShieldCheck size={14}/> No credit card</div>
               <div className="flex items-center gap-2"><Sparkles size={14}/> Auto-detects file types</div>
-              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹49 for 10 days · ₹499 for 1 year</div>
+              <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹49 + 18% GST · ₹499 + 18% GST</div>
             </div>
           </div>
 
@@ -220,24 +220,29 @@ export default function Landing() {
         <div className="max-w-[1400px] mx-auto px-8 py-24">
           <div className="mb-16">
             <div className="label-caps mb-4">Pricing</div>
-            <h2 className="font-serif text-4xl sm:text-5xl tracking-tight">One price. One year.</h2>
+            <h2 className="font-serif text-4xl sm:text-5xl tracking-tight">Fair pricing. Real tax invoice.</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border border-border">
             <div className="p-12 bg-card border-r border-border">
-              <div className="label-caps mb-4">15-day free trial</div>
-              <div className="font-serif text-6xl mb-2">₹0</div>
-              <p className="text-muted-foreground mb-8">Everything included. No credit card.</p>
-              <button onClick={user ? () => nav("/dashboard") : loginWithGoogle}
+              <div className="label-caps mb-4">10-day access</div>
+              <div className="flex items-baseline gap-2 mb-1">
+                <div className="font-serif text-6xl">₹49</div>
+                <div className="text-sm text-muted-foreground">+ 18% GST</div>
+              </div>
+              <p className="text-xs uppercase tracking-[0.15em] text-muted-foreground mb-6 font-mono">≈ ₹57.82 all-in</p>
+              <p className="text-muted-foreground mb-8">Perfect to reconcile your first month. Everything included.</p>
+              <button onClick={user ? () => nav("/upgrade") : loginWithGoogle}
                 className="btn-outline w-full" data-testid="cta-pricing-trial">
-                {user ? "Open dashboard" : "Start free trial"}
+                {user ? "Buy 10-day access" : "Sign in to buy"}
               </button>
             </div>
             <div className="p-12 bg-primary text-primary-foreground">
               <div className="label-caps mb-4 opacity-80">Annual access</div>
-              <div className="flex items-baseline gap-2 mb-2">
-                <div className="font-serif text-6xl">₹249</div>
-                <div className="opacity-70 text-sm">/ year</div>
+              <div className="flex items-baseline gap-2 mb-1">
+                <div className="font-serif text-6xl">₹499</div>
+                <div className="opacity-70 text-sm">+ 18% GST</div>
               </div>
+              <p className="text-xs uppercase tracking-[0.15em] opacity-70 mb-6 font-mono">≈ ₹588.82 all-in · about ₹49/month</p>
               <p className="opacity-80 mb-8">One payment. 365 days of full access. Renew when it expires — no auto-charge.</p>
               <button onClick={user ? () => nav("/upgrade") : loginWithGoogle}
                 className="bg-accent text-accent-foreground w-full py-3 font-medium text-sm uppercase tracking-[0.15em] hover:brightness-95"
@@ -246,6 +251,7 @@ export default function Landing() {
               </button>
             </div>
           </div>
+          <p className="text-xs text-muted-foreground mt-4">GST-compliant tax invoice with your GSTIN can be issued on request at checkout.</p>
         </div>
       </section>
 

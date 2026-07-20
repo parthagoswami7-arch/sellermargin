@@ -1,0 +1,34 @@
+{
+  "summary": "Backend testing for GST invoice feature (Iteration 4). All 15 tests passed covering plans, seller settings CRUD, India states, GST math (intra/inter-state), invoice download auth (HMAC token + session), non-admin 403 guard, and regression on /api/plans, /api/auth/me, /api/reports.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_gst_invoice.py",
+    "/app/test_reports/pytest/gst_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is now ~1000 lines — consider splitting payments/invoices/settings into separate routers.",
+    "compute_gst uses banker's rounding via round(); for ₹49 * 0.09 = 4.41 and 499 * 0.18 = 89.82 the math is correct, but complex amounts may drift a paisa vs Cashfree charge. Consider Decimal for money.",
+    "INVOICE_URL_SECRET falls back to EMERGENT_EMAIL_KEY and then a hardcoded 'seller-margin-fallback' — the hardcoded fallback should be removed to fail-fast if both env vars are missing.",
+    "download_invoice: if signed token is present but wrong, code correctly falls through to session auth path; consider returning 401 immediately on token mismatch to avoid a confusing 'Sign in' message when the user clearly used a link.",
+    "PUT /admin/settings/seller doesn't validate GSTIN format or that state exists in STATE_CODES — silent state_code='' if unknown state is passed."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_gst_invoice.py (created)"
+  ],
+  "success_rate": {"backend": "100%", "frontend": "not tested (backend-only request)"},
+  "test_credentials": "Seeded via mongosh recipe. Admin session_token: sess_admin_1784529644165 (user_id=test-admin-gst, is_admin=true). User session_token: sess_user_1784529644165 (user_id=test-user-gst).",
+  "seed_data_creation": "Inserted 2 users (test-admin-gst, test-user-gst) + sessions. Also inserts stub cf_orders docs (sm_test_authstub_001, sm_test_authstub_002) for invoice-download auth tests.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "test_gst_invoice.py resets settings.seller before public/admin tests to make GST math deterministic. If Cashfree sandbox is down, create-order tests auto-skip on 502. HMAC token is sha256(SESSION_SECRET or EMERGENT_EMAIL_KEY, order_id)[:32].",
+  "rca of the issue": "N/A — no issues found."
+}

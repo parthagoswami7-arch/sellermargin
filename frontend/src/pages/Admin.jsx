@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../lib/api";
-import { Users, IndianRupee, FileText, Sparkles, Ticket, Copy, Check } from "lucide-react";
+import { Users, IndianRupee, FileText, Sparkles, Ticket, Copy, Check, Building2, Save } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Admin() {
@@ -12,21 +12,40 @@ export default function Admin() {
   const [plans, setPlans] = useState({});
   const [copied, setCopied] = useState("");
   const [busy, setBusy] = useState(false);
+  const [seller, setSeller] = useState(null);
+  const [savingSeller, setSavingSeller] = useState(false);
+  const [states, setStates] = useState([]);
 
   const loadAll = async () => {
-    const [s, u, c, p] = await Promise.all([
+    const [s, u, c, p, sl, st] = await Promise.all([
       api.get("/admin/stats"),
       api.get("/admin/users"),
       api.get("/admin/codes"),
       api.get("/plans"),
+      api.get("/admin/settings/seller"),
+      api.get("/settings/india-states"),
     ]);
     setStats(s.data);
     setUsers(u.data.users || []);
     setCodes(c.data.codes || []);
     setPlans(p.data.plans || {});
+    setSeller(sl.data.seller || null);
+    setStates(st.data.states || []);
   };
 
   useEffect(() => { loadAll(); }, []);
+
+  const saveSeller = async () => {
+    if (!seller) return;
+    setSavingSeller(true);
+    try {
+      const r = await api.put("/admin/settings/seller", seller);
+      setSeller(r.data.seller || seller);
+      toast.success("Business settings saved. New invoices will use this info.");
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Save failed");
+    } finally { setSavingSeller(false); }
+  };
 
   const generate = async () => {
     setBusy(true);
@@ -66,6 +85,53 @@ export default function Admin() {
           <Stat label="Active paying" value={stats.paid_users} icon={Sparkles}/>
           <Stat label="Reports created" value={stats.total_reports} icon={FileText}/>
           <Stat label="Codes issued / used" value={`${activeCount + usedCount} / ${usedCount}`} icon={Ticket} last/>
+        </div>
+      )}
+
+      {/* Business (seller) settings — prints on every GST tax invoice */}
+      {seller && (
+        <div className="border border-border bg-card p-6 mb-10" data-testid="seller-settings">
+          <div className="flex items-center justify-between mb-4">
+            <div className="label-caps flex items-center gap-2"><Building2 size={14}/> Business settings (invoice header)</div>
+            <div className="text-xs text-muted-foreground">Applies to <b>new</b> invoices. Past invoices keep their original details.</div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <FieldInput label="Legal business name *" value={seller.business_name}
+              onChange={v => setSeller({ ...seller, business_name: v })} testid="s-name"/>
+            <FieldInput label="GSTIN *" value={seller.gstin} mono uppercase
+              onChange={v => setSeller({ ...seller, gstin: v })} testid="s-gstin" maxLength={15}/>
+            <FieldInput label="PAN" value={seller.pan || ""} mono uppercase
+              onChange={v => setSeller({ ...seller, pan: v })} testid="s-pan" maxLength={10}/>
+            <div>
+              <label className="label-caps block mb-1">State *</label>
+              <select value={seller.state || ""} onChange={e => {
+                const st = states.find(s => s.name === e.target.value);
+                setSeller({ ...seller, state: e.target.value, state_code: st?.code || "" });
+              }} data-testid="s-state"
+                className="w-full border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                <option value="">Select…</option>
+                {states.map(s => <option key={s.code} value={s.name}>{s.name} ({s.code})</option>)}
+              </select>
+            </div>
+            <FieldInput label="Address line 1 *" value={seller.address_line1 || ""}
+              onChange={v => setSeller({ ...seller, address_line1: v })} testid="s-addr1"/>
+            <FieldInput label="Address line 2 (city, PIN)" value={seller.address_line2 || ""}
+              onChange={v => setSeller({ ...seller, address_line2: v })} testid="s-addr2"/>
+            <FieldInput label="Contact email (for buyer replies)" value={seller.contact_email || ""}
+              onChange={v => setSeller({ ...seller, contact_email: v })} testid="s-email"/>
+            <FieldInput label="Phone" value={seller.phone || ""}
+              onChange={v => setSeller({ ...seller, phone: v })} testid="s-phone"/>
+            <FieldInput label="SAC code" value={seller.sac_code || "998314"} mono
+              onChange={v => setSeller({ ...seller, sac_code: v })} testid="s-sac"/>
+            <FieldInput label="Website" value={seller.website || ""}
+              onChange={v => setSeller({ ...seller, website: v })} testid="s-web"/>
+          </div>
+          <div className="flex justify-end mt-6">
+            <button onClick={saveSeller} disabled={savingSeller} className="btn-emerald" data-testid="s-save">
+              <Save size={12} className="inline mr-2"/>
+              {savingSeller ? "Saving…" : "Save business settings"}
+            </button>
+          </div>
         </div>
       )}
 
@@ -162,6 +228,18 @@ function Stat({ label, value, icon: Icon, last }) {
         <Icon size={16} strokeWidth={1.5} className="text-primary"/>
       </div>
       <div className="font-serif text-3xl num">{value}</div>
+    </div>
+  );
+}
+
+function FieldInput({ label, value, onChange, testid, mono, uppercase, maxLength }) {
+  return (
+    <div>
+      <label className="label-caps block mb-1">{label}</label>
+      <input value={value} maxLength={maxLength}
+        onChange={e => onChange(uppercase ? e.target.value.toUpperCase() : e.target.value)}
+        data-testid={testid}
+        className={`w-full border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${mono ? "font-mono tracking-wider" : ""}`}/>
     </div>
   );
 }

@@ -56,10 +56,23 @@ EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
 EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Seller Margin")
 
-async def send_activation_email(to_email: str, code: str, plan_label: str, days: int, site_url: str, expiry_iso: str):
+async def send_activation_email(to_email: str, code: str, plan_label: str, days: int, site_url: str, expiry_iso: str,
+                                invoice_url: str | None = None, invoice_no: str | None = None,
+                                gst_total: float | None = None):
     if not EMAIL_KEY:
         logger.warning("EMERGENT_EMAIL_KEY not set; skipping email send")
         return None
+    invoice_block = ""
+    if invoice_url and invoice_no:
+        total_str = f"Rs. {gst_total:,.2f}" if gst_total is not None else ""
+        invoice_block = f"""
+            <div style="border:1px dashed #044535;background:#F0F7F5;padding:20px;margin:0 0 20px 0;">
+              <div style="font-size:11px;letter-spacing:2px;color:#044535;text-transform:uppercase;margin-bottom:6px;font-weight:600;">GST Tax Invoice</div>
+              <div style="font-size:13px;color:#0A0B08;margin-bottom:2px;font-family:'JetBrains Mono',Consolas,monospace;">{invoice_no}</div>
+              <div style="font-size:12px;color:#5C5F5A;margin-bottom:12px;">{total_str} incl. 18% GST</div>
+              <a href="{invoice_url}" style="background:#F4B223;color:#0A0B08;text-decoration:none;padding:10px 20px;font-size:11px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;display:inline-block;">Download Tax Invoice (PDF)</a>
+            </div>
+        """
     html = f"""
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#F8F9FA;padding:32px 0;font-family:Manrope,Arial,sans-serif;">
       <tr><td align="center">
@@ -77,6 +90,7 @@ async def send_activation_email(to_email: str, code: str, plan_label: str, days:
               <div style="font-size:11px;letter-spacing:2px;color:#5C5F5A;text-transform:uppercase;margin-bottom:8px;">Activation code</div>
               <div style="font-family:'JetBrains Mono',Consolas,monospace;font-size:22px;letter-spacing:3px;color:#044535;font-weight:600;">{code}</div>
             </div>
+            {invoice_block}
             <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;">
               <tr>
                 <td style="font-size:12px;color:#5C5F5A;padding:6px 0;">Plan</td>

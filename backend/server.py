@@ -455,8 +455,8 @@ async def require_admin(user: dict = Depends(current_user)) -> dict:
     return user
 
 PLANS = {
-    "trial_10": {"id": "trial_10", "days": 10,  "price_inr": 49,  "label": "10-Day Trial",   "amount": 0.65, "currency": "usd"},
-    "annual":   {"id": "annual",   "days": 365, "price_inr": 499, "label": "1-Year Access",  "amount": 6.0,  "currency": "usd"},
+    "trial_10": {"id": "trial_10", "days": 10,  "price_inr": 49,  "label": "10-Day Trial",   "amount": 0.65, "currency": "usd", "gst_pct": 18},
+    "annual":   {"id": "annual",   "days": 365, "price_inr": 499, "label": "1-Year Access",  "amount": 6.0,  "currency": "usd", "gst_pct": 18},
 }
 
 # ---------------- payments (Flow B, one-time yearly) ----------------
@@ -559,23 +559,57 @@ async def public_plans():
 
 # ---------------- Cashfree checkout ----------------
 from cashfree import cf_create_order, cf_get_order, cf_verify_webhook, send_activation_email
+from invoice import (SELLER_DEFAULTS, STATE_CODES, compute_gst, build_invoice_number,
+                     render_invoice_pdf)
+from pymongo import ReturnDocument
 
 PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
+
+
+async def get_seller_settings() -> dict:
+    """Return the current seller/business settings, seeded with placeholders on first call."""
+    doc = await db.settings.find_one({"key": "seller"}, {"_id": 0})
+    if not doc:
+        doc = {"key": "seller", **SELLER_DEFAULTS, "updated_at": now_utc()}
+        await db.settings.insert_one({**doc})
+    doc.pop("_id", None)
+    return doc
+
+
+async def _next_invoice_seq(dt: datetime) -> int:
+    """Atomically increment the invoice sequence for the given financial year."""
+    from invoice import _fy_label
+    fy = _fy_label(dt)
+    r = await db.settings.find_one_and_update(
+        {"key": f"invoice_seq_{fy}"},
+        {"$inc": {"seq": 1}, "$setOnInsert": {"key": f"invoice_seq_{fy}", "created_at": now_utc()}},
+        upsert=True, return_document=ReturnDocument.AFTER,
+    )
+    return int(r.get("seq", 1)) if r else 1
+
 
 class CheckoutOrderReq(BaseModel):
     plan: str
     phone: Optional[str] = "9999999999"
+    # Optional GST invoice details (buyer can skip entirely)
+    wants_invoice: bool = False
+    buyer_name: Optional[str] = None
+    buyer_gstin: Optional[str] = None
+    buyer_billing_address: Optional[str] = None
+    buyer_state: Optional[str] = None
 
 @api.post("/payments/cf/create-order")
 async def cf_create(payload: CheckoutOrderReq, user: dict = Depends(current_user)):
     plan = PLANS.get(payload.plan)
     if not plan:
         raise HTTPException(400, "Unknown plan")
+    seller = await get_seller_settings()
+    gst = compute_gst(plan["price_inr"], payload.buyer_state, seller["state"])
     order_id = f"sm_{plan['id']}_{uuid.uuid4().hex[:10]}"
     return_url = f"{PUBLIC_APP_URL}/payment/success?order_id={order_id}"
     notify_url = f"{PUBLIC_APP_URL}/api/webhook/cashfree"
     try:
-        cf = await cf_create_order(order_id, plan["price_inr"],
+        cf = await cf_create_order(order_id, gst["total"],
             {"id": user["user_id"], "name": user.get("name") or user["email"].split("@")[0],
              "email": user["email"], "phone": payload.phone or "9999999999"},
             return_url, notify_url)
@@ -585,11 +619,32 @@ async def cf_create(payload: CheckoutOrderReq, user: dict = Depends(current_user
         "order_id": order_id, "cf_order_id": cf.get("cf_order_id"),
         "payment_session_id": cf["payment_session_id"],
         "user_id": user["user_id"], "user_email": user["email"],
-        "plan": plan["id"], "amount": plan["price_inr"], "currency": "INR",
+        "plan": plan["id"],
+        # Amount fields — `amount` retained for backwards-compat = total charged
+        "amount": gst["total"],
+        "base_amount": gst["base"],
+        "gst": {"cgst": gst["cgst"], "sgst": gst["sgst"], "igst": gst["igst"],
+                "cgst_pct": gst["cgst_pct"], "sgst_pct": gst["sgst_pct"], "igst_pct": gst["igst_pct"],
+                "total_tax": gst["total_tax"], "intra_state": gst["intra_state"]},
+        "currency": "INR",
+        # GST invoice buyer details (optional)
+        "wants_invoice": bool(payload.wants_invoice),
+        "buyer_name": payload.buyer_name,
+        "buyer_gstin": (payload.buyer_gstin or "").strip().upper() or None,
+        "buyer_billing_address": payload.buyer_billing_address,
+        "buyer_state": payload.buyer_state,
         "status": cf.get("order_status", "ACTIVE"), "code_delivered": False,
         "created_at": now_utc(), "updated_at": now_utc(),
     })
-    return {"order_id": order_id, "payment_session_id": cf["payment_session_id"], "env": os.environ.get("CF_ENV", "sandbox")}
+    return {
+        "order_id": order_id, "payment_session_id": cf["payment_session_id"],
+        "env": os.environ.get("CF_ENV", "sandbox"),
+        "amount_breakdown": {
+            "base": gst["base"], "total_tax": gst["total_tax"], "total": gst["total"],
+            "cgst": gst["cgst"], "sgst": gst["sgst"], "igst": gst["igst"],
+            "intra_state": gst["intra_state"],
+        },
+    }
 
 async def _fulfill_order_if_paid(order_id: str) -> dict:
     """Idempotently: if the Cashfree order is PAID and we haven't fulfilled yet,
@@ -634,13 +689,32 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
     await db.users.update_one({"user_id": rec["user_id"]},
         {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc(),
                   "last_plan": plan["id"]}})
+
+    # Always generate an invoice on successful payment (buyer can pick it up whether or not they
+    # provided GSTIN — unregistered buyers just get an invoice with "Unregistered" printed).
+    now = now_utc()
+    seq = await _next_invoice_seq(now)
+    invoice_no = build_invoice_number(seq, now)
+    cf_payment_id = None
+    try:
+        cf_payment_id = cf.get("cf_order_id") if cf else None
+    except Exception:
+        cf_payment_id = None
+    invoice_url = f"{PUBLIC_APP_URL}/api/invoices/{order_id}.pdf?token={_sign_invoice_token(order_id)}" if PUBLIC_APP_URL else None
+
     await db.cf_orders.update_one({"order_id": order_id},
-        {"$set": {"code": code, "paid_until": new_expiry}})
+        {"$set": {"code": code, "paid_until": new_expiry,
+                  "invoice_no": invoice_no, "invoice_url": invoice_url,
+                  "invoice_generated_at": now}})
+
+    gst_total = rec.get("amount") or 0.0
     await send_activation_email(
         to_email=rec["user_email"], code=code, plan_label=plan["label"],
         days=plan["days"], site_url=PUBLIC_APP_URL, expiry_iso=new_expiry.isoformat(),
+        invoice_url=invoice_url, invoice_no=invoice_no, gst_total=float(gst_total),
     )
-    return {"status": "PAID", "code": code, "paid": True, "paid_until": new_expiry.isoformat()}
+    return {"status": "PAID", "code": code, "paid": True, "paid_until": new_expiry.isoformat(),
+            "invoice_no": invoice_no, "invoice_url": invoice_url}
 
 @api.get("/payments/cf/verify/{order_id}")
 async def cf_verify(order_id: str, user: dict = Depends(current_user)):
@@ -673,6 +747,120 @@ async def cf_webhook(request: Request):
 async def admin_orders(_: dict = Depends(require_admin)):
     docs = await db.cf_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=500)
     return {"orders": docs}
+
+
+import hmac as _hmac, hashlib as _hashlib
+INVOICE_URL_SECRET = os.environ.get("SESSION_SECRET") or os.environ.get("EMERGENT_EMAIL_KEY", "seller-margin-fallback")
+
+
+def _sign_invoice_token(order_id: str) -> str:
+    return _hmac.new(INVOICE_URL_SECRET.encode(), order_id.encode(), _hashlib.sha256).hexdigest()[:32]
+
+
+# ---------------- GST Invoice download ----------------
+@api.get("/invoices/{order_id}.pdf")
+async def download_invoice(order_id: str, request: Request, token: Optional[str] = None):
+    rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Order not found")
+    # Authorize: either signed token from the emailed link, or logged-in buyer/admin
+    valid_token = bool(token) and _hmac.compare_digest(_sign_invoice_token(order_id), token)
+    if not valid_token:
+        try:
+            user = await current_user(request)
+        except HTTPException:
+            raise HTTPException(401, "Sign in or use the invoice link from your email")
+        if rec.get("user_id") != user.get("user_id") and not user.get("is_admin"):
+            raise HTTPException(403, "Not your invoice")
+    if not rec.get("code_delivered"):
+        raise HTTPException(400, "Invoice is available only after successful payment")
+
+    seller = await get_seller_settings()
+    gst_stored = rec.get("gst") or {}
+    base = float(rec.get("base_amount") or 0)
+    gst = {
+        "base": base,
+        "cgst": float(gst_stored.get("cgst", 0)),
+        "sgst": float(gst_stored.get("sgst", 0)),
+        "igst": float(gst_stored.get("igst", 0)),
+        "cgst_pct": float(gst_stored.get("cgst_pct", 0)),
+        "sgst_pct": float(gst_stored.get("sgst_pct", 0)),
+        "igst_pct": float(gst_stored.get("igst_pct", 0)),
+        "total_tax": float(gst_stored.get("total_tax", 0)),
+        "total": float(rec.get("amount") or (base + float(gst_stored.get("total_tax", 0)))),
+        "intra_state": bool(gst_stored.get("intra_state", True)),
+    }
+    plan = PLANS.get(rec["plan"], {})
+    buyer = {
+        "name": rec.get("buyer_name") or rec.get("user_email", ""),
+        "gstin": rec.get("buyer_gstin"),
+        "address": rec.get("buyer_billing_address"),
+        "state": rec.get("buyer_state"),
+        "email": rec.get("user_email"),
+    }
+    inv_date = rec.get("invoice_generated_at") or rec.get("created_at") or now_utc()
+    pdf = render_invoice_pdf(
+        invoice_no=rec.get("invoice_no") or "SM/DRAFT/0000",
+        invoice_date=inv_date, order_id=order_id,
+        cf_payment_id=rec.get("cf_order_id"),
+        seller=seller, buyer=buyer,
+        plan_label=plan.get("label", rec.get("plan", "")),
+        plan_days=int(plan.get("days", 0) or 0),
+        gst=gst,
+    )
+    filename = (rec.get("invoice_no") or f"invoice-{order_id}").replace("/", "-") + ".pdf"
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition": f'inline; filename="{filename}"'})
+
+
+# ---------------- Seller / Business settings ----------------
+class SellerSettingsReq(BaseModel):
+    business_name: str
+    gstin: str
+    pan: Optional[str] = ""
+    address_line1: str
+    address_line2: Optional[str] = ""
+    state: str
+    state_code: Optional[str] = ""
+    contact_email: Optional[str] = ""
+    phone: Optional[str] = ""
+    website: Optional[str] = ""
+    sac_code: Optional[str] = "998314"
+    hsn_description: Optional[str] = ""
+
+
+@api.get("/settings/seller")
+async def public_seller():
+    """Public — used to preview seller info on checkout / pricing page."""
+    s = await get_seller_settings()
+    return {"seller": {k: s.get(k) for k in
+        ["business_name", "gstin", "state", "state_code", "contact_email", "website", "sac_code"]}}
+
+
+@api.get("/settings/india-states")
+async def india_states():
+    return {"states": [{"name": n, "code": c} for n, c in sorted(STATE_CODES.items())]}
+
+
+@api.get("/admin/settings/seller")
+async def admin_get_seller(_: dict = Depends(require_admin)):
+    return {"seller": await get_seller_settings()}
+
+
+@api.put("/admin/settings/seller")
+async def admin_put_seller(payload: SellerSettingsReq, _: dict = Depends(require_admin)):
+    data = payload.model_dump()
+    # Auto-fill state_code from name if not provided or mismatched
+    st_from_map = STATE_CODES.get(data["state"], "")
+    if not data.get("state_code") or (st_from_map and data["state_code"] != st_from_map):
+        data["state_code"] = st_from_map or data.get("state_code", "")
+    data["gstin"] = (data["gstin"] or "").strip().upper()
+    await db.settings.update_one(
+        {"key": "seller"},
+        {"$set": {**data, "key": "seller", "updated_at": now_utc()}},
+        upsert=True,
+    )
+    return {"ok": True, "seller": await get_seller_settings()}
 
 class CheckoutReq(BaseModel):
     origin_url: str
