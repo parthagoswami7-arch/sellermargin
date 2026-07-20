@@ -31,12 +31,32 @@ Amazon sellers spend hours every month reconciling six raw reports from Seller C
 - Admin stats + user/payment listings
 - Auto-detects file types from headers
 
+## Implemented (2026-02-20)
+- Cashfree Payments (sandbox) with signed webhook + poll-verify
+- Resend email delivery of activation codes
+- 5-report system (was 6): storage/inbound/removal fees derived from Payment CSV
+- Split of Customer Return % vs RTO %
+- Rebranded to "Seller Margin" with custom logo across UI & exports
+
+## Implemented (2026-02-26) — GST + tax invoice
+- `invoice.py` — CGST/SGST vs IGST auto-split (18% base), Indian-numbering amount-in-words, FY-based invoice numbering `SM/FY26-27/0001`, ReportLab PDF renderer
+- Landing page pricing reads "₹49 + 18% GST" and "₹499 + 18% GST" with "≈ ₹XX all-in" total
+- Upgrade page collects optional GST invoice details (business name, GSTIN, state, address); shows live CGST/SGST/IGST breakdown before payment
+- `/api/payments/cf/create-order` computes total inc GST and passes total to Cashfree
+- On payment success: signed HMAC invoice URL delivered in the same email as the activation code
+- `/api/invoices/{order_id}.pdf` — dual-auth (session cookie OR signed link from email)
+- Admin > Business settings UI (`/api/admin/settings/seller`) for owner to fill in placeholder GSTIN, address, PAN, state — auto-derives state code from state
+- Placeholder seller details ship out-of-the-box so invoicing works from day one
+
 ## Roadmap / Backlog
 - P0: Multi-month comparison chart (currently only per-month)
 - P0: Razorpay INR alternative (Stripe India not supported by claimable sandbox)
 - P1: SKU cost bulk import via CSV
 - P1: Detailed fee-type breakdown drill-down
 - P1: Email report on finalization
+- P1: Owner to fill actual business details via Admin > Business settings (placeholders currently in use)
 - P2: Multi-marketplace (US, UK, UAE)
-- P2: GST / TDS separated line items
 - P2: Reconciliation diff between months
+- P2: Refactor server.py (~1000 lines) into routers: payments/invoices/settings/admin
+- P2: Convert money math to `decimal.Decimal` to avoid paisa-level drift on complex amounts
+- P2: GSTIN format validation (regex 15-char)
