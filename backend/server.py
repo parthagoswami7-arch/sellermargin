@@ -178,6 +178,7 @@ async def create_session(payload: SessionRequest, response: Response):
             "paid_until": None,
             "is_paid": False,
             "is_admin": email in ADMIN_EMAILS,
+            "reports_quota": 0,
             "created_at": now_utc(),
         })
 
@@ -1059,6 +1060,7 @@ async def indexes():
     await db.user_sessions.create_index("session_token", unique=True)
     await db.user_sessions.create_index("user_id")
     await db.reports.create_index([("user_id", 1), ("created_at", -1)])
+    await db.reports.create_index([("user_id", 1), ("target_month", 1), ("target_year", 1)])
     await db.reports.create_index("report_id", unique=True)
     await db.cost_prices.create_index([("user_id", 1), ("sku", 1)], unique=True)
     await db.payment_transactions.create_index("session_id", unique=True)
