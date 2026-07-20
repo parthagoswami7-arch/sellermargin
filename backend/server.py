@@ -556,6 +556,124 @@ async def admin_list_codes(_: dict = Depends(require_admin)):
 async def public_plans():
     return {"plans": PLANS}
 
+
+# ---------------- Cashfree checkout ----------------
+from cashfree import cf_create_order, cf_get_order, cf_verify_webhook, send_activation_email
+
+PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
+
+class CheckoutOrderReq(BaseModel):
+    plan: str
+    phone: Optional[str] = "9999999999"
+
+@api.post("/payments/cf/create-order")
+async def cf_create(payload: CheckoutOrderReq, user: dict = Depends(current_user)):
+    plan = PLANS.get(payload.plan)
+    if not plan:
+        raise HTTPException(400, "Unknown plan")
+    order_id = f"sm_{plan['id']}_{uuid.uuid4().hex[:10]}"
+    return_url = f"{PUBLIC_APP_URL}/payment/success?order_id={order_id}"
+    notify_url = f"{PUBLIC_APP_URL}/api/webhook/cashfree"
+    try:
+        cf = await cf_create_order(order_id, plan["price_inr"],
+            {"id": user["user_id"], "name": user.get("name") or user["email"].split("@")[0],
+             "email": user["email"], "phone": payload.phone or "9999999999"},
+            return_url, notify_url)
+    except Exception as e:
+        raise HTTPException(502, f"Cashfree error: {e}")
+    await db.cf_orders.insert_one({
+        "order_id": order_id, "cf_order_id": cf.get("cf_order_id"),
+        "payment_session_id": cf["payment_session_id"],
+        "user_id": user["user_id"], "user_email": user["email"],
+        "plan": plan["id"], "amount": plan["price_inr"], "currency": "INR",
+        "status": cf.get("order_status", "ACTIVE"), "code_delivered": False,
+        "created_at": now_utc(), "updated_at": now_utc(),
+    })
+    return {"order_id": order_id, "payment_session_id": cf["payment_session_id"], "env": os.environ.get("CF_ENV", "sandbox")}
+
+async def _fulfill_order_if_paid(order_id: str) -> dict:
+    """Idempotently: if the Cashfree order is PAID and we haven't fulfilled yet,
+    generate a code, redeem it for the buyer, and email them."""
+    rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Order not found")
+    # If already fulfilled, just return current state
+    if rec.get("code_delivered"):
+        return {"status": rec["status"], "code": rec.get("code"), "paid": True}
+    # Verify with Cashfree
+    try:
+        cf = await cf_get_order(order_id)
+    except Exception as e:
+        raise HTTPException(502, f"Cashfree verify error: {e}")
+    status = cf.get("order_status")
+    await db.cf_orders.update_one({"order_id": order_id},
+        {"$set": {"status": status, "updated_at": now_utc()}})
+    if status != "PAID":
+        return {"status": status, "paid": False}
+
+    # Atomically mark delivered so a webhook + poll can't double-fulfill
+    upd = await db.cf_orders.update_one(
+        {"order_id": order_id, "code_delivered": {"$ne": True}},
+        {"$set": {"code_delivered": True, "delivered_at": now_utc()}},
+    )
+    if upd.modified_count == 0:
+        rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+        return {"status": "PAID", "code": rec.get("code"), "paid": True}
+
+    # Generate + record + auto-redeem for the buyer
+    plan = PLANS[rec["plan"]]
+    code = _gen_code()
+    await db.activation_codes.insert_one({
+        "code": code, "plan": rec["plan"], "status": "used",
+        "used_by": rec["user_id"], "used_by_email": rec["user_email"],
+        "used_at": now_utc(), "created_at": now_utc(),
+        "source": "cashfree", "order_id": order_id,
+    })
+    buyer = await db.users.find_one({"user_id": rec["user_id"]}, {"_id": 0})
+    new_expiry = _extend_paid_until(buyer.get("paid_until") if buyer else None, plan["days"])
+    await db.users.update_one({"user_id": rec["user_id"]},
+        {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc(),
+                  "last_plan": plan["id"]}})
+    await db.cf_orders.update_one({"order_id": order_id},
+        {"$set": {"code": code, "paid_until": new_expiry}})
+    await send_activation_email(
+        to_email=rec["user_email"], code=code, plan_label=plan["label"],
+        days=plan["days"], site_url=PUBLIC_APP_URL, expiry_iso=new_expiry.isoformat(),
+    )
+    return {"status": "PAID", "code": code, "paid": True, "paid_until": new_expiry.isoformat()}
+
+@api.get("/payments/cf/verify/{order_id}")
+async def cf_verify(order_id: str, user: dict = Depends(current_user)):
+    rec = await db.cf_orders.find_one({"order_id": order_id, "user_id": user["user_id"]}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Order not found")
+    result = await _fulfill_order_if_paid(order_id)
+    return result
+
+@app.post("/api/webhook/cashfree")
+async def cf_webhook(request: Request):
+    raw = await request.body()
+    sig = request.headers.get("x-webhook-signature", "")
+    ts  = request.headers.get("x-webhook-timestamp", "")
+    if not cf_verify_webhook(raw, sig, ts):
+        raise HTTPException(401, "Invalid signature")
+    try:
+        payload = json.loads(raw)
+    except Exception:
+        raise HTTPException(400, "Invalid JSON")
+    order_id = payload.get("data", {}).get("order", {}).get("order_id")
+    if order_id:
+        try:
+            await _fulfill_order_if_paid(order_id)
+        except Exception as e:
+            print("webhook fulfill error:", e)
+    return {"ok": True}
+
+@api.get("/admin/orders")
+async def admin_orders(_: dict = Depends(require_admin)):
+    docs = await db.cf_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=500)
+    return {"orders": docs}
+
 class CheckoutReq(BaseModel):
     origin_url: str
 
