@@ -1,7 +1,8 @@
 import React, { useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Upload, Calculator, FileDown, ShieldCheck, Sparkles, Package, TrendingUp, IndianRupee, Play, Video } from "lucide-react";
+import { ArrowRight, Upload, Calculator, FileDown, ShieldCheck, Sparkles, Package, TrendingUp, IndianRupee, Play, Video, MessageCircle, Phone, Clock } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import WhatsAppFab, { whatsappLink } from "../components/WhatsAppFab";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 function loginWithGoogle() {
@@ -72,6 +73,7 @@ export default function Landing() {
             <a href="#watch" className="btn-ghost hidden md:inline-block" data-testid="nav-watch">Watch</a>
             <a href="#how-it-works" className="btn-ghost hidden md:inline-block" data-testid="nav-how">How it works</a>
             <a href="#pricing" className="btn-ghost hidden md:inline-block" data-testid="nav-pricing">Pricing</a>
+            <a href="#help" className="btn-ghost hidden md:inline-block" data-testid="nav-help">Help</a>
             {user ? (
               <button onClick={() => nav("/dashboard")} className="btn-emerald" data-testid="cta-open-dashboard">
                 Open dashboard <ArrowRight size={14} className="inline ml-2" />
@@ -255,9 +257,84 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* Help / Contact */}
+      <section id="help" className="border-b border-border bg-primary text-primary-foreground">
+        <div className="max-w-[1400px] mx-auto px-8 py-24 grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
+          <div className="lg:col-span-5">
+            <div className="label-caps mb-4 opacity-80">Need help?</div>
+            <h2 className="font-serif text-4xl sm:text-5xl tracking-tight mb-6">
+              Talk to a human on <span className="italic text-accent">WhatsApp</span>.
+            </h2>
+            <p className="opacity-80 leading-relaxed mb-8 max-w-md">
+              Stuck on an Amazon report, a return, or a payment? Message me directly on WhatsApp — I usually reply within a few hours during India business hours. No bots, no ticket queues.
+            </p>
+            <div className="space-y-3 text-sm opacity-90">
+              <div className="flex items-center gap-3"><Phone size={14} className="text-accent"/> <span className="font-mono">+91 89108 71321</span></div>
+              <div className="flex items-center gap-3"><Clock size={14} className="text-accent"/> Mon–Sat · 10 AM – 8 PM IST</div>
+              <div className="flex items-center gap-3"><ShieldCheck size={14} className="text-accent"/> Answers to reconciliation, GST invoice, refund queries</div>
+            </div>
+          </div>
+          <div className="lg:col-span-7">
+            <div className="bg-background text-foreground p-10 border border-primary/20 shadow-2xl">
+              <div className="flex items-start gap-4 mb-8">
+                <div className="w-14 h-14 rounded-full bg-[#25D366] flex items-center justify-center shrink-0">
+                  <MessageCircle size={26} strokeWidth={2} fill="white" className="text-[#25D366]"/>
+                </div>
+                <div>
+                  <div className="font-serif text-2xl mb-1">Chat on WhatsApp</div>
+                  <div className="text-sm text-muted-foreground">Fastest way to reach me — screenshots, files, voice notes all welcome.</div>
+                </div>
+              </div>
+              <div className="border-t border-border pt-6 space-y-4">
+                <QuickHelp
+                  label="I have a question before buying"
+                  msg="Hi, I'm looking at Seller Margin and have a quick question before I buy —"
+                />
+                <QuickHelp
+                  label="Something in my P&L looks wrong"
+                  msg="Hi, I'm using Seller Margin and my P&L numbers look off. Can you help review? My registered email is —"
+                />
+                <QuickHelp
+                  label="I need a proper GST invoice for a past payment"
+                  msg="Hi, I need help with a GST invoice for a Seller Margin purchase. My registered email is —"
+                />
+                <QuickHelp
+                  label="Anything else — start a conversation"
+                  msg="Hi, I need help with Seller Margin."
+                  primary
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <footer className="py-12 text-center text-xs text-muted-foreground">
         <div>© 2026 Seller Margin — Amazon P&amp;L Reconciliation. Made with care for sellers.</div>
+        <div className="mt-2">
+          Need help? <a href={whatsappLink()} target="_blank" rel="noreferrer noopener" className="text-primary hover:underline" data-testid="footer-wa-link">WhatsApp +91 89108 71321</a>
+        </div>
       </footer>
+
+      <WhatsAppFab message="Hi, I'm looking at Seller Margin and I need some help —"/>
     </div>
   );
 }
+
+function QuickHelp({ label, msg, primary }) {
+  return (
+    <a href={whatsappLink(msg)} target="_blank" rel="noreferrer noopener"
+      data-testid={`quick-help-${label.slice(0, 12).replace(/\s+/g, "-").toLowerCase()}`}
+      className={`flex items-center justify-between gap-4 p-4 border transition-all group ${
+        primary
+          ? "border-primary bg-primary/5 hover:bg-primary hover:text-primary-foreground"
+          : "border-border bg-background hover:border-primary hover:bg-primary/5"
+      }`}>
+      <span className="text-sm">{label}</span>
+      <span className={`text-xs uppercase tracking-[0.15em] font-bold flex items-center gap-2 shrink-0 ${primary ? "text-primary group-hover:text-primary-foreground" : "text-muted-foreground group-hover:text-primary"}`}>
+        Chat <ArrowRight size={14}/>
+      </span>
+    </a>
+  );
+}
+

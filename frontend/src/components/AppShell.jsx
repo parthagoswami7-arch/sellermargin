@@ -1,8 +1,9 @@
 import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
-import { ChartLine, Layers, DollarSign, History as HistoryIcon, ShieldCheck, LogOut, Sparkles } from "lucide-react";
+import { ChartLine, Layers, DollarSign, History as HistoryIcon, ShieldCheck, LogOut, Sparkles, MessageCircle } from "lucide-react";
 import { Toaster } from "sonner";
+import WhatsAppFab, { whatsappLink } from "./WhatsAppFab";
 
 export default function AppShell({ children }) {
   const { user, logout } = useAuth();
@@ -93,6 +94,7 @@ export default function AppShell({ children }) {
         </div>
       </main>
       <Toaster position="bottom-right" richColors />
+      <WhatsAppFab message={`Hi, I need help with Seller Margin. My email is ${user?.email || "—"}`}/>
     </div>
   );
 }
