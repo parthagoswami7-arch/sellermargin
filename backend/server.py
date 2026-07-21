@@ -833,6 +833,90 @@ async def admin_orders(_: dict = Depends(require_admin)):
     return {"orders": docs}
 
 
+# ---------------- Admin exports (Sales CSV + GSTR-1 Excel) ----------------
+from gst_exports import build_sales_csv, build_gstr1_excel
+
+
+@api.get("/admin/exports/sales.csv")
+async def admin_export_sales_csv(from_date: Optional[str] = None,
+                                 to_date: Optional[str] = None,
+                                 _: dict = Depends(require_admin)):
+    """Sales CSV of all PAID Cashfree orders in [from_date, to_date] (ISO YYYY-MM-DD).
+    Both bounds inclusive. Omit both to get everything."""
+    q: dict = {"code_delivered": True}
+    if from_date or to_date:
+        rng: dict = {}
+        if from_date:
+            rng["$gte"] = datetime.fromisoformat(from_date).replace(tzinfo=timezone.utc)
+        if to_date:
+            rng["$lte"] = datetime.fromisoformat(to_date).replace(tzinfo=timezone.utc) + timedelta(days=1)
+        q["invoice_generated_at"] = rng
+    orders = await db.cf_orders.find(q, {"_id": 0}).sort("invoice_generated_at", 1).to_list(length=5000)
+    seller = await get_seller_settings()
+    csv_bytes = build_sales_csv(orders, seller)
+    tag = f"{from_date or 'all'}_to_{to_date or 'now'}"
+    return Response(
+        content=csv_bytes, media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="sales_{tag}.csv"'},
+    )
+
+
+@api.get("/admin/exports/gstr1.xlsx")
+async def admin_export_gstr1(month: int, year: int, _: dict = Depends(require_admin)):
+    """GSTR-1 filing Excel for the given calendar month.
+    Two sheets: b2b (registered buyers with GSTIN), b2cs (unregistered aggregated by state)."""
+    if not (1 <= month <= 12) or not (2020 <= year <= 2100):
+        raise HTTPException(400, "Invalid month/year")
+    start = datetime(year, month, 1, tzinfo=timezone.utc)
+    if month == 12:
+        end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
+    else:
+        end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
+    orders = await db.cf_orders.find(
+        {"code_delivered": True, "invoice_generated_at": {"$gte": start, "$lt": end}},
+        {"_id": 0},
+    ).sort("invoice_generated_at", 1).to_list(length=5000)
+    seller = await get_seller_settings()
+    xlsx = build_gstr1_excel(orders, seller, month, year)
+    return Response(
+        content=xlsx,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="GSTR1_{month:02d}{year}.xlsx"'},
+    )
+
+
+@api.get("/admin/exports/summary")
+async def admin_export_summary(_: dict = Depends(require_admin)):
+    """Quick period-based totals for the Admin UI to render cards.
+    Returns totals for: this month, last month, this FY."""
+    now = now_utc()
+    # This month
+    tm_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    # Last month
+    if now.month == 1:
+        lm_start = datetime(now.year - 1, 12, 1, tzinfo=timezone.utc)
+        lm_end = tm_start
+    else:
+        lm_start = datetime(now.year, now.month - 1, 1, tzinfo=timezone.utc)
+        lm_end = tm_start
+    # This FY (April-March)
+    fy_year = now.year if now.month >= 4 else now.year - 1
+    fy_start = datetime(fy_year, 4, 1, tzinfo=timezone.utc)
+
+    async def _sum(q):
+        docs = await db.cf_orders.find(q, {"_id": 0, "base_amount": 1, "amount": 1, "gst": 1}).to_list(length=10000)
+        gross = sum(float(d.get("amount") or 0) for d in docs)
+        taxable = sum(float(d.get("base_amount") or 0) for d in docs)
+        gst = sum(float((d.get("gst") or {}).get("total_tax") or 0) for d in docs)
+        return {"gross": round(gross, 2), "taxable": round(taxable, 2), "gst": round(gst, 2), "count": len(docs)}
+
+    return {
+        "this_month": await _sum({"code_delivered": True, "invoice_generated_at": {"$gte": tm_start}}),
+        "last_month": await _sum({"code_delivered": True, "invoice_generated_at": {"$gte": lm_start, "$lt": lm_end}}),
+        "this_fy":    await _sum({"code_delivered": True, "invoice_generated_at": {"$gte": fy_start}}),
+    }
+
+
 import hmac as _hmac, hashlib as _hashlib
 INVOICE_URL_SECRET = os.environ.get("SESSION_SECRET") or os.environ.get("EMERGENT_EMAIL_KEY", "seller-margin-fallback")
 

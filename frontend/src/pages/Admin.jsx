@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../lib/api";
-import { Users, IndianRupee, FileText, Sparkles, Ticket, Copy, Check, Building2, Save } from "lucide-react";
+import { Users, IndianRupee, FileText, Sparkles, Ticket, Copy, Check, Building2, Save, FileDown, FileSpreadsheet, Calendar, Receipt, Download } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Admin() {
@@ -15,15 +15,26 @@ export default function Admin() {
   const [seller, setSeller] = useState(null);
   const [savingSeller, setSavingSeller] = useState(false);
   const [states, setStates] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [salesSummary, setSalesSummary] = useState(null);
+
+  // Sales/GSTR date pickers — default to current month
+  const now = new Date();
+  const [fromDate, setFromDate] = useState(() => new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10));
+  const [toDate, setToDate] = useState(() => now.toISOString().slice(0, 10));
+  const [gstrMonth, setGstrMonth] = useState(now.getMonth() + 1);
+  const [gstrYear, setGstrYear] = useState(now.getFullYear());
 
   const loadAll = async () => {
-    const [s, u, c, p, sl, st] = await Promise.all([
+    const [s, u, c, p, sl, st, o, sm] = await Promise.all([
       api.get("/admin/stats"),
       api.get("/admin/users"),
       api.get("/admin/codes"),
       api.get("/plans"),
       api.get("/admin/settings/seller"),
       api.get("/settings/india-states"),
+      api.get("/admin/orders"),
+      api.get("/admin/exports/summary"),
     ]);
     setStats(s.data);
     setUsers(u.data.users || []);
@@ -31,6 +42,8 @@ export default function Admin() {
     setPlans(p.data.plans || {});
     setSeller(sl.data.seller || null);
     setStates(st.data.states || []);
+    setOrders(o.data.orders || []);
+    setSalesSummary(sm.data);
   };
 
   useEffect(() => { loadAll(); }, []);
@@ -45,6 +58,36 @@ export default function Admin() {
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Save failed");
     } finally { setSavingSeller(false); }
+  };
+
+  const downloadFile = async (url, filename) => {
+    try {
+      const r = await api.get(url, { responseType: "blob" });
+      const blob = new Blob([r.data]);
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success(`Downloading ${filename}`);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Download failed");
+    }
+  };
+
+  const downloadSalesCsv = () => {
+    const tag = `${fromDate}_to_${toDate}`;
+    downloadFile(`/admin/exports/sales.csv?from_date=${fromDate}&to_date=${toDate}`, `sales_${tag}.csv`);
+  };
+
+  const downloadGstr1 = () => {
+    downloadFile(`/admin/exports/gstr1.xlsx?month=${gstrMonth}&year=${gstrYear}`, `GSTR1_${String(gstrMonth).padStart(2,"0")}${gstrYear}.xlsx`);
+  };
+
+  const downloadInvoice = (order) => {
+    if (!order.invoice_no) { toast.error("No invoice generated yet"); return; }
+    downloadFile(`/invoices/${order.order_id}.pdf`, `${order.invoice_no.replace(/\//g,"-")}.pdf`);
   };
 
   const generate = async () => {
@@ -136,7 +179,7 @@ export default function Admin() {
       )}
 
       {/* Code generator */}
-      <div className="border border-border bg-card p-6 mb-10">
+      <div className="border border-border bg-card p-6 mb-10" data-testid="codes-generator">
         <div className="label-caps mb-4 flex items-center gap-2"><Ticket size={14}/> Generate activation codes</div>
         <div className="grid grid-cols-12 gap-3 items-end">
           <div className="col-span-4">
@@ -166,9 +209,9 @@ export default function Admin() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-10">
         {/* Codes list */}
-        <div className="border border-border bg-card">
+        <div className="border border-border bg-card" data-testid="codes-list">
           <div className="p-4 border-b border-border flex items-center justify-between">
             <div className="label-caps">Codes ({codes.length})</div>
             <div className="text-xs text-muted-foreground">{activeCount} active · {usedCount} used</div>
@@ -194,7 +237,7 @@ export default function Admin() {
         </div>
 
         {/* Users */}
-        <div className="border border-border bg-card">
+        <div className="border border-border bg-card" data-testid="users-list">
           <div className="p-4 border-b border-border label-caps">Users</div>
           <div className="max-h-[500px] overflow-auto">
             {users.map(u => (
@@ -219,6 +262,122 @@ export default function Admin() {
           </div>
         </div>
       </div>
+
+      {/* Sales & GST filings */}
+      {salesSummary && (
+        <div className="border border-border bg-card mb-10" data-testid="sales-gst-section">
+          <div className="p-6 border-b border-border flex items-center justify-between">
+            <div>
+              <div className="label-caps flex items-center gap-2"><Receipt size={14}/> Sales & GST filings</div>
+              <div className="text-xs text-muted-foreground mt-1">
+                Downloadable reports for your CA — Sales register, GSTR-1 filing sheet, and individual GST invoices.
+              </div>
+            </div>
+          </div>
+
+          {/* Period totals */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border-b border-border">
+            <PeriodTile label="This month" data={salesSummary.this_month}/>
+            <PeriodTile label="Last month" data={salesSummary.last_month} bordered/>
+            <PeriodTile label="This FY (Apr-Mar)" data={salesSummary.this_fy}/>
+          </div>
+
+          {/* Export controls */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-b border-border">
+            {/* Sales CSV */}
+            <div className="p-6 md:border-r border-border">
+              <div className="flex items-center gap-2 mb-4">
+                <FileDown size={16} className="text-primary"/>
+                <div className="font-serif text-xl">Sales register (CSV)</div>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Full order list with buyer info, taxable value, GST breakdown, and totals — one row per order.
+              </p>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="label-caps block mb-1">From</label>
+                  <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)}
+                    data-testid="sales-from" className="w-full border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"/>
+                </div>
+                <div>
+                  <label className="label-caps block mb-1">To</label>
+                  <input type="date" value={toDate} onChange={e => setToDate(e.target.value)}
+                    data-testid="sales-to" className="w-full border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"/>
+                </div>
+              </div>
+              <button onClick={downloadSalesCsv} className="btn-emerald w-full" data-testid="dl-sales-csv">
+                <FileDown size={14} className="inline mr-2"/> Download sales CSV
+              </button>
+            </div>
+
+            {/* GSTR-1 */}
+            <div className="p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <FileSpreadsheet size={16} className="text-primary"/>
+                <div className="font-serif text-xl">GSTR-1 filing sheet</div>
+              </div>
+              <p className="text-xs text-muted-foreground mb-4">
+                Excel with <b>b2b</b> + <b>b2cs</b> tabs matching the GSTN offline utility template. Give this to your CA to upload directly.
+              </p>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div>
+                  <label className="label-caps block mb-1">Month</label>
+                  <select value={gstrMonth} onChange={e => setGstrMonth(Number(e.target.value))} data-testid="gstr-month"
+                    className="w-full border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                    {Array.from({length:12}, (_,i)=>i+1).map(m => <option key={m} value={m}>{String(m).padStart(2,"0")} — {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m-1]}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label-caps block mb-1">Year</label>
+                  <input type="number" min={2020} max={2100} value={gstrYear} onChange={e => setGstrYear(Number(e.target.value))}
+                    data-testid="gstr-year" className="w-full border border-border bg-background px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary"/>
+                </div>
+              </div>
+              <button onClick={downloadGstr1} className="btn-emerald w-full" data-testid="dl-gstr1">
+                <FileSpreadsheet size={14} className="inline mr-2"/> Download GSTR-1 Excel
+              </button>
+            </div>
+          </div>
+
+          {/* Orders list with per-order invoice download */}
+          <div>
+            <div className="p-4 border-b border-border flex items-center justify-between">
+              <div className="label-caps">Recent orders ({orders.length})</div>
+              <div className="text-[11px] text-muted-foreground">Newest first · showing last {Math.min(orders.length, 500)}</div>
+            </div>
+            <div className="max-h-[500px] overflow-auto">
+              {orders.length === 0 && (
+                <div className="p-6 text-sm text-muted-foreground">No orders yet.</div>
+              )}
+              {orders.map(o => (
+                <div key={o.order_id} className="p-3 border-b border-border last:border-b-0 flex items-center gap-3 text-xs hover:bg-muted/30" data-testid={`order-${o.order_id}`}>
+                  <div className="w-24 font-mono text-[10px] text-muted-foreground shrink-0">
+                    {o.invoice_generated_at ? new Date(o.invoice_generated_at).toLocaleDateString("en-IN") : (o.created_at ? new Date(o.created_at).toLocaleDateString("en-IN") : "—")}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-mono truncate">{o.invoice_no || <span className="text-muted-foreground">draft</span>}</div>
+                    <div className="text-[10px] text-muted-foreground truncate">
+                      {o.buyer_name || o.user_email} · <b>{o.plan}</b>
+                      {o.buyer_gstin ? <> · GSTIN {o.buyer_gstin}</> : null}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-mono">₹{Number(o.amount || 0).toLocaleString("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2})}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {o.status === "PAID" || o.code_delivered ? <span className="text-primary font-bold">PAID</span> : (o.status || "pending")}
+                    </div>
+                  </div>
+                  <button onClick={() => downloadInvoice(o)} disabled={!o.invoice_no}
+                    className="btn-outline text-[10px] px-3 py-1.5 disabled:opacity-40"
+                    data-testid={`dl-invoice-${o.order_id}`}>
+                    <Download size={11} className="inline mr-1"/> Invoice
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -243,6 +402,22 @@ function FieldInput({ label, value, onChange, testid, mono, uppercase, maxLength
         onChange={e => onChange(uppercase ? e.target.value.toUpperCase() : e.target.value)}
         data-testid={testid}
         className={`w-full border border-border bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary ${mono ? "font-mono tracking-wider" : ""}`}/>
+    </div>
+  );
+}
+
+function PeriodTile({ label, data, bordered }) {
+  return (
+    <div className={`p-6 ${bordered ? "md:border-x border-border" : ""}`}>
+      <div className="label-caps mb-2">{label}</div>
+      <div className="font-serif text-3xl num text-primary" data-testid={`period-${label.toLowerCase().replace(/[^a-z]+/g,"-")}`}>
+        ₹{Number(data?.gross || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+      </div>
+      <div className="text-[11px] text-muted-foreground font-mono mt-2 space-y-0.5">
+        <div>Taxable ₹{Number(data?.taxable || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+        <div>GST collected ₹{Number(data?.gst || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}</div>
+        <div className="text-primary">{data?.count || 0} order{(data?.count || 0) === 1 ? "" : "s"}</div>
+      </div>
     </div>
   );
 }
