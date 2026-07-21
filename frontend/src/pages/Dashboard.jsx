@@ -151,7 +151,7 @@ export default function Dashboard() {
           <FileText size={40} strokeWidth={1.5} className="mx-auto mb-6 text-muted-foreground" />
           <h3 className="font-serif text-3xl mb-3">No reports yet</h3>
           <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-            Start by creating your first monthly reconciliation. Upload six Amazon reports and get instant P&amp;L.
+            Start by creating your first monthly reconciliation. Upload five Amazon reports and get instant P&amp;L.
           </p>
           <button onClick={() => nav("/new-report")} className="btn-emerald" data-testid="empty-new-btn">
             <Plus size={16} className="inline mr-2" /> Create first report

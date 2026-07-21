@@ -151,7 +151,7 @@ export default function Landing() {
               <div className="label-caps mb-4">Watch a walkthrough</div>
               <h2 className="font-serif text-4xl sm:text-5xl tracking-tight mb-6">See it in 60 seconds.</h2>
               <p className="text-muted-foreground leading-relaxed mb-8">
-                Drop your six Amazon reports, enter cost prices, and get a finalized P&amp;L with charts — end to end in about a minute.
+                Drop your five Amazon reports, enter cost prices, and get a finalized P&amp;L with charts — end to end in about a minute.
               </p>
               <div className="space-y-3 text-sm text-muted-foreground">
                 <div className="flex gap-3"><span className="text-accent font-mono">01</span> Upload &amp; auto-detect</div>

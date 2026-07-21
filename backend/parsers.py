@@ -1,4 +1,4 @@
-"""File auto-detection and parsing for the 6 Amazon reports."""
+"""File auto-detection and parsing for the 5 Amazon reports."""
 from __future__ import annotations
 import io
 import re
