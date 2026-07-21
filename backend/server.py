@@ -833,6 +833,43 @@ async def admin_orders(_: dict = Depends(require_admin)):
     return {"orders": docs}
 
 
+@api.delete("/admin/orders/{order_id}")
+async def admin_delete_order(order_id: str, admin: dict = Depends(require_admin)):
+    """Delete an order (typically a fake/test order). If the order was PAID and had already
+    granted a report quota to the buyer, that quota is reversed (never dropping below 0).
+    The linked activation code is also deleted. paid_until is NOT rewound automatically —
+    if you need to also revoke access, manually adjust the user via mongosh or Admin UI."""
+    rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Order not found")
+
+    # Reverse report quota if it was granted
+    plan = PLANS.get(rec.get("plan"), {})
+    quota_granted = int(plan.get("reports_quota") or 0) if rec.get("code_delivered") else 0
+    if quota_granted > 0 and rec.get("user_id"):
+        # Never let quota go negative
+        user = await db.users.find_one({"user_id": rec["user_id"]}, {"reports_quota": 1})
+        cur_quota = int((user or {}).get("reports_quota") or 0)
+        new_quota = max(0, cur_quota - quota_granted)
+        await db.users.update_one(
+            {"user_id": rec["user_id"]},
+            {"$set": {"reports_quota": new_quota}},
+        )
+
+    # Remove linked activation code (if any)
+    if rec.get("code"):
+        await db.activation_codes.delete_one({"code": rec["code"]})
+
+    await db.cf_orders.delete_one({"order_id": order_id})
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "quota_reversed": quota_granted,
+        "code_deleted": rec.get("code") or None,
+        "deleted_by": admin.get("email"),
+    }
+
+
 # ---------------- Admin exports (Sales CSV + GSTR-1 Excel) ----------------
 from gst_exports import build_sales_csv, build_gstr1_excel
 
