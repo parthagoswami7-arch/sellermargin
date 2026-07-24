@@ -55,13 +55,18 @@ def cf_verify_webhook(raw: bytes, signature: str, timestamp: str) -> bool:
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
 EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Seller Margin")
+EMAIL_CONTACT = os.environ.get("EMAIL_CONTACT", "billing@sellermargin.example")
 
 async def send_activation_email(to_email: str, code: str, plan_label: str, days: int, site_url: str, expiry_iso: str,
                                 invoice_url: str | None = None, invoice_no: str | None = None,
-                                gst_total: float | None = None):
+                                gst_total: float | None = None) -> dict:
+    """Send the post-purchase activation email. Returns a small status dict:
+    {"ok": bool, "id": str|None, "error": str|None}. Never raises — safe to call inline."""
     if not EMAIL_KEY:
-        logger.warning("EMERGENT_EMAIL_KEY not set; skipping email send")
-        return None
+        logger.warning("EMERGENT_EMAIL_KEY not set; skipping email send to %s", to_email)
+        return {"ok": False, "id": None, "error": "EMERGENT_EMAIL_KEY not configured"}
+    if not to_email or "@" not in to_email:
+        return {"ok": False, "id": None, "error": f"Invalid recipient email: {to_email!r}"}
     invoice_block = ""
     if invoice_url and invoice_no:
         total_str = f"Rs. {gst_total:,.2f}" if gst_total is not None else ""
@@ -119,16 +124,27 @@ async def send_activation_email(to_email: str, code: str, plan_label: str, days:
       </td></tr>
     </table>
     """
-    payload = {"to": [to_email], "subject": f"Your {plan_label} activation code — Seller Margin",
-               "html": html, "from_name": EMAIL_FROM_NAME}
+    payload = {
+        "to": [to_email],
+        "subject": f"Your {plan_label} activation code — Seller Margin",
+        "html": html,
+        "from_name": EMAIL_FROM_NAME,
+        "contact_email": EMAIL_CONTACT,
+    }
     try:
         async with httpx.AsyncClient(timeout=30) as c:
             r = await c.post(f"{EMAIL_BASE_URL}/api/v1/email/send",
                              headers={"X-Email-Key": EMAIL_KEY}, json=payload)
         if r.status_code >= 400:
-            logger.error("Email send failed %s %s", r.status_code, r.text[:300])
-            return None
-        return r.json()
+            logger.error("Email send FAILED to=%s status=%s body=%s", to_email, r.status_code, r.text[:300])
+            return {"ok": False, "id": None, "error": f"HTTP {r.status_code}: {r.text[:200]}"}
+        data = {}
+        try:
+            data = r.json() or {}
+        except Exception:
+            data = {}
+        logger.info("Email send OK to=%s id=%s", to_email, data.get("id"))
+        return {"ok": True, "id": data.get("id"), "error": None}
     except Exception as e:
-        logger.exception("Email send exception: %s", e)
-        return None
+        logger.exception("Email send exception to=%s: %s", to_email, e)
+        return {"ok": False, "id": None, "error": str(e)[:200]}

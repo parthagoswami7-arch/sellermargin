@@ -1,0 +1,30 @@
+{
+  "summary": "Verified the activation-email fix + new admin resend endpoint. 9/9 pytest cases pass. Code inspection confirms contact_email is now included in the Emergent Email payload with EMAIL_CONTACT env fallback. Live-fired the Emergent Email proxy directly and via the backend resend endpoint — both return 202 with a UUID id. Order tracking fields (email_sent, email_send_id, email_error, email_last_attempt) are correctly written after each attempt. Auth guards (401/403), 404 (unknown order), and 400 (not fulfilled yet) all behave as spec'd. Legacy paid orders lacking the email_sent field still resend fine.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "https://integrations.emergentagent.com/api/v1/email/send", "issue": "Proxy accepts payloads WITHOUT contact_email and returns 202 with an id (silent accept). This means the 4xx-validation regression I attempted to reproduce (bug report step #5) does NOT produce a 4xx — it accepts and (per the bug narrative) drops delivery downstream. The fix is still correct per the Emergent playbook; just noting the proxy does not surface a rejection when contact_email is missing."}
+    ]
+  },
+  "frontend_issues": {"ui_bugs": [], "integration_issues": [], "design_issues": []},
+  "test_report_links": [
+    "/app/backend/tests/test_email_activation.py",
+    "/app/test_reports/pytest/email_activation_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py is 1250+ lines — split into routers (auth, reports, admin, payments, invoices).",
+    "cashfree.py: EMAIL_CONTACT default 'billing@sellermargin.example' would be shipped if env var missing. Consider raising/logging loudly if it's the placeholder domain — safer than silently sending an invalid contact_email.",
+    "_fulfill_order_if_paid stores paid_until as a native datetime in cf_orders but downstream code (resend endpoint) handles both str and datetime — inconsistency that should be normalized at write-time to ISO string OR always datetime.",
+    "admin_resend_email raises 502 on email failure but still updates email_sent=false + email_error on the order — good. However the client (Admin UI Mail button) needs to handle 502 gracefully; consider returning 200 with {ok:false, error} instead so the UI can render the specific failure without try/catch on non-2xx.",
+    "Emergent Email response schema: current code reads data.get('id'). Provider actually returns 202 with {id} — worth also capturing/logging the status code (202 vs 200) for future auditability."
+  ],
+  "updated_files": ["/app/backend/tests/test_email_activation.py"],
+  "success_rate": {"backend": "100%", "frontend": "n/a"},
+  "test_credentials": "Seeded ephemeral admin + non-admin users per test via mongosh recipe from /app/memory/test_credentials.md (Bearer tokens); cleaned up in fixture teardown. Verified no TEST_ residue post-run.",
+  "seed_data_creation": "Per-test cf_orders docs with plan='annual', code_delivered=true (and one with code_delivered=false for 400 case). Buyer emails used the sellermargin.in domain — the Emergent Email proxy 422-rejects example.com, so all test recipients must use a real-looking domain. This is now documented inline in the tests.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "The Emergent Email proxy validates recipient domain (rejects example.com with 422 'Invalid to field'). Use sellermargin.in or another real-looking domain when seeding fake buyer emails. The proxy does NOT reject missing contact_email at the API layer (returns 202 with an id even without it), so the pre-fix bug manifested as silent downstream delivery drop — you cannot reproduce the root cause by expecting a 4xx. Existing paid orders for tapangoswami1161@gmail.com and parthagoswami7@gmail.com in cf_orders were not touched.",
+  "rca of the issue": "Root cause was omission of the contact_email field in send_activation_email's payload to the Emergent Email proxy. The proxy accepts the request (202 + id) but per the Emergent Email playbook, Resend requires contact_email at the downstream layer for the actual send — resulting in silent drop or bounce. Fix adds contact_email (env EMAIL_CONTACT, default support@sellermargin.in). Verified: after fix, a real send returns 202 with UUID; backend logs 'Email send OK to=... id=...' on success and 'Email send FAILED to=... status=... body=...' on failure (verified via example.com rejection case)."
+}

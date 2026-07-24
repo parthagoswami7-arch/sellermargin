@@ -789,16 +789,25 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
 
     gst_total = rec.get("amount") or 0.0
     expiry_iso_safe = new_expiry.isoformat() if new_expiry else ""
-    await send_activation_email(
+    email_result = await send_activation_email(
         to_email=rec["user_email"], code=code, plan_label=plan["label"],
         days=plan["days"], site_url=PUBLIC_APP_URL, expiry_iso=expiry_iso_safe,
         invoice_url=invoice_url, invoice_no=invoice_no, gst_total=float(gst_total),
     )
+    # Store email delivery state separately from code_delivered so admins can retry
+    await db.cf_orders.update_one({"order_id": order_id},
+        {"$set": {
+            "email_sent":     bool(email_result.get("ok")),
+            "email_send_id":  email_result.get("id"),
+            "email_error":    email_result.get("error"),
+            "email_last_attempt": now_utc(),
+        }})
     return {"status": "PAID", "code": code, "paid": True,
             "paid_until": (new_expiry.isoformat() if new_expiry else None),
             "invoice_no": invoice_no, "invoice_url": invoice_url,
             "reports_added": int(plan.get("reports_quota") or 0),
-            "is_topup": bool(plan.get("is_topup"))}
+            "is_topup": bool(plan.get("is_topup")),
+            "email_sent": bool(email_result.get("ok"))}
 
 @api.get("/payments/cf/verify/{order_id}")
 async def cf_verify(order_id: str, user: dict = Depends(current_user)):
@@ -833,12 +842,45 @@ async def admin_orders(_: dict = Depends(require_admin)):
     return {"orders": docs}
 
 
+@api.post("/admin/orders/{order_id}/resend-email")
+async def admin_resend_email(order_id: str, _: dict = Depends(require_admin)):
+    """Resend the post-purchase activation email for a PAID order. Uses the existing
+    code + invoice from the order. Common cases: buyer says they never got the email,
+    buyer's spam filter ate it, buyer wants it forwarded to a different address."""
+    rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Order not found")
+    if not rec.get("code_delivered"):
+        raise HTTPException(400, "Order not fulfilled yet — nothing to resend")
+    plan = PLANS.get(rec.get("plan")) or {}
+    invoice_no = rec.get("invoice_no")
+    invoice_url = (f"{PUBLIC_APP_URL}/api/invoices/{order_id}.pdf?token={_sign_invoice_token(order_id)}"
+                   if PUBLIC_APP_URL and invoice_no else None)
+    expiry_iso = ""
+    if rec.get("paid_until"):
+        raw = rec["paid_until"]
+        expiry_iso = raw if isinstance(raw, str) else raw.isoformat()
+    result = await send_activation_email(
+        to_email=rec["user_email"], code=rec.get("code") or "—",
+        plan_label=plan.get("label", rec.get("plan", "Access")),
+        days=int(plan.get("days") or 0), site_url=PUBLIC_APP_URL,
+        expiry_iso=expiry_iso, invoice_url=invoice_url, invoice_no=invoice_no,
+        gst_total=float(rec.get("amount") or 0),
+    )
+    await db.cf_orders.update_one({"order_id": order_id},
+        {"$set": {
+            "email_sent": bool(result.get("ok")),
+            "email_send_id": result.get("id"),
+            "email_error": result.get("error"),
+            "email_last_attempt": now_utc(),
+        }})
+    if not result.get("ok"):
+        raise HTTPException(502, f"Email send failed: {result.get('error')}")
+    return {"ok": True, "id": result.get("id"), "sent_to": rec["user_email"]}
+
+
 @api.delete("/admin/orders/{order_id}")
 async def admin_delete_order(order_id: str, admin: dict = Depends(require_admin)):
-    """Delete an order (typically a fake/test order). If the order was PAID and had already
-    granted a report quota to the buyer, that quota is reversed (never dropping below 0).
-    The linked activation code is also deleted. paid_until is NOT rewound automatically —
-    if you need to also revoke access, manually adjust the user via mongosh or Admin UI."""
     rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "Order not found")

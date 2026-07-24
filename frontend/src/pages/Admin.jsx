@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../lib/api";
-import { Users, IndianRupee, FileText, Sparkles, Ticket, Copy, Check, Building2, Save, FileDown, FileSpreadsheet, Calendar, Receipt, Download, Trash2 } from "lucide-react";
+import { Users, IndianRupee, FileText, Sparkles, Ticket, Copy, Check, Building2, Save, FileDown, FileSpreadsheet, Calendar, Receipt, Download, Trash2, Mail } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Admin() {
@@ -91,9 +91,6 @@ export default function Admin() {
   };
 
   const deleteOrder = async (order) => {
-    const buyer = order.buyer_name || order.user_email;
-    const amount = `₹${Number(order.amount || 0).toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
-    const isPaid = order.code_delivered;
     const msg = isPaid
       ? `Delete PAID order ${order.invoice_no || order.order_id} (${buyer}, ${amount})?\n\n` +
         `This will also:\n• Reverse the reports quota granted (${order.plan})\n• Delete the linked activation code\n\n` +
@@ -394,6 +391,12 @@ export default function Admin() {
                     className="btn-outline text-[10px] px-3 py-1.5 disabled:opacity-40"
                     data-testid={`dl-invoice-${o.order_id}`}>
                     <Download size={11} className="inline mr-1"/> Invoice
+                  </button>
+                  <button onClick={() => resendEmail(o)} disabled={!o.code_delivered}
+                    className={`text-[10px] px-2 py-1.5 border transition-colors disabled:opacity-30 ${o.email_sent === false ? "border-destructive text-destructive hover:bg-destructive hover:text-destructive-foreground" : "border-border text-muted-foreground hover:border-primary hover:text-primary"}`}
+                    data-testid={`resend-email-${o.order_id}`}
+                    title={o.email_sent === false ? `Email send FAILED: ${o.email_error || "unknown"}` : (o.email_sent ? "Email delivered — click to resend" : "Resend activation email")}>
+                    <Mail size={11}/>
                   </button>
                   <button onClick={() => deleteOrder(o)}
                     className="text-[10px] px-2 py-1.5 border border-destructive/40 text-destructive hover:bg-destructive hover:text-destructive-foreground transition-colors"
