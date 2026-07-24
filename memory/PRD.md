@@ -78,7 +78,6 @@ Amazon sellers spend hours every month reconciling six raw reports from Seller C
 - P0: Multi-month comparison chart (currently only per-month)
 - P0: Razorpay INR alternative (Stripe India not supported by claimable sandbox)
 - P1: Ship the Agency Starter plan (make it purchasable — add to PLANS with `available:true` and give a Cashfree flow)
-- P1: SKU cost bulk import via CSV
 - P1: Detailed fee-type breakdown drill-down
 - P1: Email report on finalization
 - P1: Owner to fill actual business details via Admin > Business settings (placeholders currently in use)

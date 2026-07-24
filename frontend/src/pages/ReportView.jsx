@@ -75,8 +75,12 @@ export default function ReportView() {
           <div className="label-caps mb-3">Final profit</div>
           <div className="font-serif text-6xl text-primary num">{money(s.final_profit)}</div>
           <div className="text-sm text-muted-foreground mt-2">
-            {s.profit_pct.toFixed(2)}% of revenue · {s.profit_pct_on_cogs.toFixed(2)}% on cost · {s.orders_count} orders · {(s.customer_return_count ?? 0)} customer returns · {(s.rto_count ?? 0)} RTO
+            {s.profit_pct.toFixed(2)}% of revenue · {s.profit_pct_on_cogs.toFixed(2)}% on cost · {s.orders_count} orders · {(s.customer_return_count ?? 0)} customer returns
           </div>
+        </div>
+        <div>
+          <div className="label-caps mb-2">Total item price (before settlement)</div>
+          <div className="font-serif text-3xl num" data-testid="total-item-price">{money(s.total_item_price)}</div>
         </div>
         <div>
           <div className="label-caps mb-2">Total received</div>
@@ -89,27 +93,26 @@ export default function ReportView() {
       </div>
 
       {/* Grid of details */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-0 border border-border mt-8">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-0 border border-border mt-8">
         {[
           ["Settlement", money(s.settlement)],
           ["Reimbursement", money(s.reimbursement)],
           ["COGS", money(s.cogs)],
           ["Ad spend", money(s.ad_spend)],
-          ["Removal fee", money(s.removal_fee)],
         ].map(([k,v], i) => (
-          <div key={k} className={`p-6 ${i < 4 ? "md:border-r border-border" : ""} border-b md:border-b-0 border-border`}>
+          <div key={k} className={`p-6 ${i < 3 ? "md:border-r border-border" : ""} border-b md:border-b-0 border-border`}>
             <div className="label-caps mb-2">{k}</div>
             <div className="font-mono text-xl">{v}</div>
           </div>
         ))}
         {[
+          ["Removal fee", money(s.removal_fee)],
           ["Inbound fee", money(s.inbound_fee)],
           ["Storage fee", money(s.storage_fee)],
           ["ACOS %", `${s.acos_pct.toFixed(2)}%`],
           ["Customer Return %", `${(s.customer_return_pct ?? s.return_pct ?? 0).toFixed(2)}%`],
-          ["RTO %", `${(s.rto_pct ?? 0).toFixed(2)}%`],
-        ].map(([k,v], i) => (
-          <div key={k} className={`p-6 ${i < 4 ? "md:border-r border-border" : ""} border-t border-border`}>
+        ].map(([k,v], i, arr) => (
+          <div key={k} className={`p-6 ${i < arr.length - 1 ? "md:border-r border-border" : ""} border-t border-border`}>
             <div className="label-caps mb-2">{k}</div>
             <div className="font-mono text-xl">{v}</div>
           </div>

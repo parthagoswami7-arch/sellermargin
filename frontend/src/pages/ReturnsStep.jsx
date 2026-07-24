@@ -8,12 +8,19 @@ const isSellable = (r) => (r.product_condition || "").toLowerCase().includes("se
 const isDamagedFba = (r) => r.return_source === "fba" && !isSellable(r);
 const isEasyShip = (r) => r.return_source === "easyship";
 
-function ReturnRow({ r, last, onChange, showKind = false }) {
+function ReturnRow({ r, last, onChange, showKind = false, showLpn = false }) {
   const eff = r.override !== "" ? Number(r.override) : Number(r.cost_price_unit || 0);
   const rowSaving = (Number(r.quantity || 0)) * (Number(r.cost_price_unit || 0) - eff);
   return (
     <div className={`grid grid-cols-12 py-3 px-4 items-center row-return ${!last ? "border-b border-border" : ""}`}>
-      <div className="col-span-3 num text-xs">{r.order_id}</div>
+      <div className="col-span-3 num text-xs">
+        {r.order_id}
+        {showLpn && r.lpn && (
+          <div className="text-[10px] text-muted-foreground font-mono mt-0.5" data-testid={`lpn-${r.order_id}`}>
+            LPN {r.lpn}
+          </div>
+        )}
+      </div>
       <div className="col-span-2 num text-sm">{r.sku}</div>
       <div className="col-span-1 num text-sm text-right">{r.quantity}</div>
       <div className="col-span-2 num text-sm text-right text-muted-foreground">{money(r.cost_price_unit)}</div>
@@ -193,7 +200,7 @@ export default function ReturnsStep() {
                 <div className="col-span-2 text-right">Savings</div>
               </div>
               <div className="max-h-[300px] overflow-auto">
-                {sellable.map((r, i) => <ReturnRow key={r.order_id + i} r={r} last={i === sellable.length - 1} onChange={setOverride} />)}
+                {sellable.map((r, i) => <ReturnRow key={r.order_id + i} r={r} last={i === sellable.length - 1} onChange={setOverride} showLpn />)}
               </div>
             </div>
           )}
@@ -217,7 +224,7 @@ export default function ReturnsStep() {
                 <div className="col-span-2 text-right">Savings</div>
               </div>
               <div className="max-h-[300px] overflow-auto">
-                {damaged.map((r, i) => <ReturnRow key={r.order_id + i} r={r} last={i === damaged.length - 1} onChange={setOverride} />)}
+                {damaged.map((r, i) => <ReturnRow key={r.order_id + i} r={r} last={i === damaged.length - 1} onChange={setOverride} showLpn />)}
               </div>
             </div>
           )}

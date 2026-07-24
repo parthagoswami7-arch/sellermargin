@@ -80,10 +80,12 @@ def build_rows(orders: list[dict], payment: list[dict], fba_returns: list[dict],
         return_reason = ""
         product_condition = ""
         return_source = ""
+        lpn = ""
         if fba_r:
             return_reason = str(col(fba_r, "reason")).strip()
             product_condition = str(col(fba_r, "detailed-disposition")).strip()
             return_source = "fba"
+            lpn = str(col(fba_r, "license-plate-number", "License Plate Number", "lpn", "LPN")).strip()
         elif es_r:
             return_reason = str(col(es_r, "return reason", "Return reason")).strip()
             return_source = "easyship"
@@ -105,6 +107,7 @@ def build_rows(orders: list[dict], payment: list[dict], fba_returns: list[dict],
             "product_condition": product_condition,
             "return_source": return_source,          # fba / easyship / ""
             "return_kind": return_kind,              # customer / rto / ""
+            "lpn": lpn,                              # only populated for fba returns
             "order_status": str(col(o, "order-status")).strip(),
             "is_return": bool(return_reason or product_condition),
         })

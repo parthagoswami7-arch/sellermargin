@@ -35,7 +35,7 @@ export const FILE_TYPE_LABELS = {
 export const FILE_TYPE_LINKS = {
   orders: {
     label: "Seller Central → Reports → Fulfillment → All Orders",
-    url: "https://sellercentral.amazon.in/reportcentral/ORDER_REPORT/1",
+    url: "https://sellercentral.amazon.in/reportcentral/FlatFileAllOrdersReport/1",
     help: "Choose 'By Last Update' or 'By Order Date', pick your target month, download as .txt (tab-separated).",
     range: "1 month",
     range_hint: "Set the date range to the full target month (1st → last day).",
