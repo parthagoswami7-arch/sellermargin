@@ -74,6 +74,15 @@ Amazon sellers spend hours every month reconciling six raw reports from Seller C
 - **FOMO on Annual (₹499)**: added `list_price_inr: 599` + `discount_note` to the plan. Landing + Upgrade cards render `₹499` next to a strikethrough `₹599`, a "Save ₹100" corner badge, and "⚡ LAUNCH OFFER · LIMITED TIME" caption
 - New "Buy 5 top-up (₹249)" contextual CTA on `NewReport` quota banner when user is running low or exhausted; also on Upgrade page as a highlighted strip below the plan cards (respects `?highlight=topup` query param)
 
+
+## Bug fix (2026-02-27 late) — Post-purchase email not delivered
+- Root cause: `send_activation_email()` payload was missing the `contact_email` field required by the Emergent Email proxy. The proxy accepted the request (202) but downstream Resend silently dropped delivery.
+- Fix: Added `contact_email` to the payload (env `EMAIL_CONTACT`, default `support@sellermargin.in`). send_activation_email now returns `{ok, id, error}` and both success (`Email send OK`) and failure (`Email send FAILED`) are logged.
+- Order doc now stores `email_sent`, `email_send_id`, `email_error`, `email_last_attempt` — full delivery audit trail per order.
+- New endpoint POST `/api/admin/orders/{order_id}/resend-email` — admin only, retries delivery using the stored code + invoice.
+- Admin UI: new Mail button on each order row (red if last send failed).
+- Backend tests: 9/9 (iteration_7.json).
+
 ## Roadmap / Backlog
 - P0: Multi-month comparison chart (currently only per-month)
 - P0: Razorpay INR alternative (Stripe India not supported by claimable sandbox)

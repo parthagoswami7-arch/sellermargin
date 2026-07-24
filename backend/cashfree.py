@@ -55,7 +55,7 @@ def cf_verify_webhook(raw: bytes, signature: str, timestamp: str) -> bool:
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
 EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Seller Margin")
-EMAIL_CONTACT = os.environ.get("EMAIL_CONTACT", "billing@sellermargin.example")
+EMAIL_CONTACT = os.environ.get("EMAIL_CONTACT", "support@sellermargin.in")
 
 async def send_activation_email(to_email: str, code: str, plan_label: str, days: int, site_url: str, expiry_iso: str,
                                 invoice_url: str | None = None, invoice_no: str | None = None,

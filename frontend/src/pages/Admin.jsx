@@ -90,7 +90,22 @@ export default function Admin() {
     downloadFile(`/invoices/${order.order_id}.pdf`, `${order.invoice_no.replace(/\//g,"-")}.pdf`);
   };
 
+  const resendEmail = async (order) => {
+    if (!order.code_delivered) { toast.error("Order not fulfilled yet"); return; }
+    if (!window.confirm(`Resend activation email + tax invoice to ${order.user_email}?`)) return;
+    try {
+      const r = await api.post(`/admin/orders/${order.order_id}/resend-email`);
+      toast.success(`Email resent to ${r.data.sent_to}`);
+      await loadAll();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Resend failed");
+    }
+  };
+
   const deleteOrder = async (order) => {
+    const buyer = order.buyer_name || order.user_email;
+    const amount = `₹${Number(order.amount || 0).toLocaleString("en-IN", {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    const isPaid = order.code_delivered;
     const msg = isPaid
       ? `Delete PAID order ${order.invoice_no || order.order_id} (${buyer}, ${amount})?\n\n` +
         `This will also:\n• Reverse the reports quota granted (${order.plan})\n• Delete the linked activation code\n\n` +
