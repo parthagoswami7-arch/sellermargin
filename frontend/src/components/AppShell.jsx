@@ -29,7 +29,7 @@ export default function AppShell({ children }) {
     <div className="min-h-screen flex bg-background">
       <aside className="w-64 border-r border-border bg-card flex flex-col">
         <div className="px-6 py-6 border-b border-border">
-          <Link to="/dashboard" className="flex items-center gap-3" data-testid="brand-link">
+          <Link to="/" className="flex items-center gap-3" data-testid="brand-link">
             <img src="/brand/logo.png" alt="Seller Margin" className="h-9 w-9 object-contain shrink-0"/>
             <div>
               <div className="font-serif text-lg leading-none tracking-tight">Seller Margin</div>
