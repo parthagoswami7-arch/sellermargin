@@ -842,6 +842,18 @@ async def admin_orders(_: dict = Depends(require_admin)):
     return {"orders": docs}
 
 
+@api.get("/admin/cf-config")
+async def admin_cf_config(_: dict = Depends(require_admin)):
+    """Return current Cashfree environment info so the Admin UI can prompt the operator
+    to whitelist the correct domain in the Cashfree merchant dashboard."""
+    return {
+        "cf_env": os.environ.get("CF_ENV", "sandbox"),
+        "public_app_url": PUBLIC_APP_URL or "",
+        "whitelist_url": "https://merchant.cashfree.com/merchants/pg/developers/whitelisting",
+        "webhook_url": (f"{PUBLIC_APP_URL}/api/webhook/cashfree" if PUBLIC_APP_URL else ""),
+    }
+
+
 @api.post("/admin/orders/{order_id}/resend-email")
 async def admin_resend_email(order_id: str, _: dict = Depends(require_admin)):
     """Resend the post-purchase activation email for a PAID order. Uses the existing

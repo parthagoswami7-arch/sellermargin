@@ -75,7 +75,19 @@ export default function Upgrade() {
       };
       const r = await api.post("/payments/cf/create-order", payload);
       const cashfree = await loadCashfree({ mode: r.data.env === "production" ? "production" : "sandbox" });
-      await cashfree.checkout({ paymentSessionId: r.data.payment_session_id, redirectTarget: "_modal" });
+      const cfResult = await cashfree.checkout({ paymentSessionId: r.data.payment_session_id, redirectTarget: "_modal" });
+      // Cashfree checkout returns an object like {error, order} — surface errors clearly
+      if (cfResult?.error) {
+        const msg = String(cfResult.error?.message || cfResult.error || "");
+        if (/whitelist|not enabled|not approved|broken link/i.test(msg)) {
+          toast.error("This domain isn't whitelisted in Cashfree yet. Ask the admin to whitelist it at merchant.cashfree.com > Developers > Whitelisting.", { duration: 12000 });
+        } else if (/cancel|closed|abort/i.test(msg)) {
+          toast.error("Payment cancelled. Try again when ready.");
+        } else {
+          toast.error(`Cashfree: ${msg}`);
+        }
+        return;
+      }
       const v = await api.get(`/payments/cf/verify/${r.data.order_id}`);
       if (v.data.paid) {
         toast.success("Payment successful — reports added + activation email sent!");

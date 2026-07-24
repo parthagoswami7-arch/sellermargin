@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import api from "../lib/api";
-import { Users, IndianRupee, FileText, Sparkles, Ticket, Copy, Check, Building2, Save, FileDown, FileSpreadsheet, Calendar, Receipt, Download, Trash2, Mail } from "lucide-react";
+import { Users, IndianRupee, FileText, Sparkles, Ticket, Copy, Check, Building2, Save, FileDown, FileSpreadsheet, Calendar, Receipt, Download, Trash2, Mail, ShieldAlert, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Admin() {
@@ -17,6 +17,7 @@ export default function Admin() {
   const [states, setStates] = useState([]);
   const [orders, setOrders] = useState([]);
   const [salesSummary, setSalesSummary] = useState(null);
+  const [cfConfig, setCfConfig] = useState(null);
 
   // Sales/GSTR date pickers — default to current month
   const now = new Date();
@@ -26,7 +27,7 @@ export default function Admin() {
   const [gstrYear, setGstrYear] = useState(now.getFullYear());
 
   const loadAll = async () => {
-    const [s, u, c, p, sl, st, o, sm] = await Promise.all([
+    const [s, u, c, p, sl, st, o, sm, cf] = await Promise.all([
       api.get("/admin/stats"),
       api.get("/admin/users"),
       api.get("/admin/codes"),
@@ -35,6 +36,7 @@ export default function Admin() {
       api.get("/settings/india-states"),
       api.get("/admin/orders"),
       api.get("/admin/exports/summary"),
+      api.get("/admin/cf-config"),
     ]);
     setStats(s.data);
     setUsers(u.data.users || []);
@@ -44,6 +46,7 @@ export default function Admin() {
     setStates(st.data.states || []);
     setOrders(o.data.orders || []);
     setSalesSummary(sm.data);
+    setCfConfig(cf.data);
   };
 
   useEffect(() => { loadAll(); }, []);
@@ -163,6 +166,45 @@ export default function Admin() {
           <Stat label="Active paying" value={stats.paid_users} icon={Sparkles}/>
           <Stat label="Reports created" value={stats.total_reports} icon={FileText}/>
           <Stat label="Codes issued / used" value={`${activeCount + usedCount} / ${usedCount}`} icon={Ticket} last/>
+        </div>
+      )}
+
+      {/* Cashfree production whitelisting reminder */}
+      {cfConfig && cfConfig.cf_env === "production" && (
+        <div className="border-2 border-accent bg-accent/10 p-6 mb-8" data-testid="cf-whitelist-card">
+          <div className="flex items-start gap-4">
+            <ShieldAlert size={22} className="text-accent shrink-0 mt-0.5"/>
+            <div className="flex-1 min-w-0">
+              <div className="label-caps mb-1">Cashfree production checklist</div>
+              <div className="font-serif text-xl mb-3">Whitelist your domain in Cashfree before accepting real payments</div>
+              <p className="text-sm text-muted-foreground mb-4">
+                Cashfree production rejects checkout from any domain that isn't explicitly whitelisted (the "Broken Link" error you may have seen). You must add the app's public URL as a whitelisted domain in the Cashfree Merchant Dashboard, otherwise all buyers will hit the same block.
+              </p>
+              <div className="border border-border bg-background p-4 mb-4 font-mono text-xs break-all">
+                Whitelist this: <b>{cfConfig.public_app_url}</b>
+              </div>
+              <ol className="text-sm text-muted-foreground space-y-1.5 mb-4 list-decimal list-inside">
+                <li>Open <a href={cfConfig.whitelist_url} target="_blank" rel="noreferrer noopener" className="text-primary underline">Cashfree → Developers → Whitelisting</a></li>
+                <li>Click <b>Raise Whitelisting Request</b></li>
+                <li>Paste the URL above (with <code>https://</code>) as your <b>Website URL</b> / <b>Domain</b></li>
+                <li>Submit — Cashfree typically approves within 1 business day for verified merchants</li>
+                <li>Once approved, test a small purchase from the app to confirm it works</li>
+              </ol>
+              <div className="flex flex-wrap gap-3">
+                <a href={cfConfig.whitelist_url} target="_blank" rel="noreferrer noopener"
+                  className="btn-emerald text-xs inline-flex items-center gap-2" data-testid="cf-open-whitelist">
+                  Open Cashfree whitelisting <ExternalLink size={12}/>
+                </a>
+                <a href="https://merchant.cashfree.com/merchants/pg/developers/webhooks" target="_blank" rel="noreferrer noopener"
+                  className="btn-outline text-xs inline-flex items-center gap-2" data-testid="cf-open-webhooks">
+                  Open webhooks page <ExternalLink size={12}/>
+                </a>
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-4">
+                Also configure webhook: <span className="font-mono">{cfConfig.webhook_url}</span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
 
