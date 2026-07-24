@@ -79,10 +79,6 @@ export default function ReportView() {
           </div>
         </div>
         <div>
-          <div className="label-caps mb-2">Total item price (before settlement)</div>
-          <div className="font-serif text-3xl num" data-testid="total-item-price">{money(s.total_item_price)}</div>
-        </div>
-        <div>
           <div className="label-caps mb-2">Total received</div>
           <div className="font-serif text-3xl num">{money(s.total_received)}</div>
         </div>
@@ -92,17 +88,19 @@ export default function ReportView() {
         </div>
       </div>
 
-      {/* Grid of details */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-0 border border-border mt-8">
+      {/* Grid of details — 5 blocks per row, 2 rows (10 blocks total) */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-0 border border-border mt-8">
         {[
-          ["Settlement", money(s.settlement)],
-          ["Reimbursement", money(s.reimbursement)],
-          ["COGS", money(s.cogs)],
-          ["Ad spend", money(s.ad_spend)],
-        ].map(([k,v], i) => (
-          <div key={k} className={`p-6 ${i < 3 ? "md:border-r border-border" : ""} border-b md:border-b-0 border-border`}>
+          ["Total item price", money(s.total_item_price), "Before settlement", "total-item-price"],
+          ["Settlement", money(s.settlement), null, null],
+          ["Reimbursement", money(s.reimbursement), null, null],
+          ["COGS", money(s.cogs), null, null],
+          ["Ad spend", money(s.ad_spend), null, null],
+        ].map(([k,v,sub,tid], i) => (
+          <div key={k} className={`p-6 ${i < 4 ? "md:border-r border-border" : ""} border-b md:border-b-0 border-border`}>
             <div className="label-caps mb-2">{k}</div>
-            <div className="font-mono text-xl">{v}</div>
+            <div className="font-mono text-xl" data-testid={tid || undefined}>{v}</div>
+            {sub && <div className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground mt-1">{sub}</div>}
           </div>
         ))}
         {[
@@ -111,8 +109,8 @@ export default function ReportView() {
           ["Storage fee", money(s.storage_fee)],
           ["ACOS %", `${s.acos_pct.toFixed(2)}%`],
           ["Customer Return %", `${(s.customer_return_pct ?? s.return_pct ?? 0).toFixed(2)}%`],
-        ].map(([k,v], i, arr) => (
-          <div key={k} className={`p-6 ${i < arr.length - 1 ? "md:border-r border-border" : ""} border-t border-border`}>
+        ].map(([k,v], i) => (
+          <div key={k} className={`p-6 ${i < 4 ? "md:border-r border-border" : ""} border-t border-border`}>
             <div className="label-caps mb-2">{k}</div>
             <div className="font-mono text-xl">{v}</div>
           </div>
