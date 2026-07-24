@@ -44,7 +44,7 @@ function VideoPlayer() {
             <Play size={28} fill="currentColor" strokeWidth={0} className="ml-1"/>
           </div>
           <div className="relative">
-            <div className="font-serif text-3xl mb-1">60-second walkthrough</div>
+            <div className="font-serif text-3xl mb-1">2-minute walkthrough</div>
             <div className="text-sm opacity-70 uppercase tracking-[0.2em]">Click to play</div>
           </div>
         </button>
@@ -149,16 +149,24 @@ export default function Landing() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-start">
             <div className="lg:col-span-4">
               <div className="label-caps mb-4">Watch a walkthrough</div>
-              <h2 className="font-serif text-4xl sm:text-5xl tracking-tight mb-6">See it in 60 seconds.</h2>
+              <h2 className="font-serif text-4xl sm:text-5xl tracking-tight mb-6">See it in 2 minutes.</h2>
               <p className="text-muted-foreground leading-relaxed mb-8">
-                Drop your five Amazon reports, enter cost prices, and get a finalized P&amp;L with charts — end to end in about a minute.
+                Drop your five Amazon reports, enter cost prices, and get a finalized P&amp;L with charts — end to end in about two minutes.
               </p>
-              <div className="space-y-3 text-sm text-muted-foreground">
+              <div className="space-y-3 text-sm text-muted-foreground mb-8">
                 <div className="flex gap-3"><span className="text-accent font-mono">01</span> Upload &amp; auto-detect</div>
                 <div className="flex gap-3"><span className="text-accent font-mono">02</span> Set cost prices per SKU</div>
                 <div className="flex gap-3"><span className="text-accent font-mono">03</span> Review returns</div>
                 <div className="flex gap-3"><span className="text-accent font-mono">04</span> Export PDF + Excel</div>
               </div>
+              <a href="https://youtu.be/Y1KxRWvnIXU" target="_blank" rel="noreferrer noopener"
+                 className="inline-flex items-center gap-3 border-2 border-destructive text-destructive px-5 py-3 hover:bg-destructive hover:text-destructive-foreground transition-colors text-sm font-medium tracking-tight group"
+                 data-testid="youtube-full-video-link">
+                <svg width="20" height="14" viewBox="0 0 24 17" fill="currentColor" xmlns="http://www.w3.org/2000/svg" className="shrink-0">
+                  <path d="M23.5 2.5a3 3 0 0 0-2.1-2.1C19.5 0 12 0 12 0S4.5 0 2.6.4A3 3 0 0 0 .5 2.5C0 4.4 0 8.4 0 8.4s0 4 .5 5.9a3 3 0 0 0 2.1 2.1c1.9.5 9.4.5 9.4.5s7.5 0 9.4-.5a3 3 0 0 0 2.1-2.1c.5-1.9.5-5.9.5-5.9s0-4-.5-5.9zM9.6 12V4.9l6.3 3.5-6.3 3.6z"/>
+                </svg>
+                <span className="uppercase tracking-[0.15em] text-xs">Watch full "How to use" on YouTube</span>
+              </a>
             </div>
             <div className="lg:col-span-8">
               <VideoPlayer />
