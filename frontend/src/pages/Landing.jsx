@@ -103,12 +103,12 @@ export default function Landing() {
             <div className="flex flex-wrap gap-4">
               <button onClick={user ? () => nav("/dashboard") : loginWithGoogle}
                 className="btn-emerald text-base" data-testid="cta-hero-primary">
-                {user ? "Open dashboard" : "Start 15-day free trial"} <ArrowRight size={16} className="inline ml-2" />
+                {user ? "Open dashboard" : "Get started — ₹49"} <ArrowRight size={16} className="inline ml-2" />
               </button>
               <a href="#how-it-works" className="btn-outline text-base" data-testid="cta-hero-secondary">See how it works</a>
             </div>
             <div className="mt-10 flex flex-wrap gap-6 text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              <div className="flex items-center gap-2"><ShieldCheck size={14}/> No credit card</div>
+              <div className="flex items-center gap-2"><ShieldCheck size={14}/> Instant activation</div>
               <div className="flex items-center gap-2"><Sparkles size={14}/> Auto-detects file types</div>
               <div className="flex items-center gap-2"><IndianRupee size={14}/> ₹49 · 7-day · 1 report &nbsp;·&nbsp; <span className="line-through opacity-70">₹599</span> <b className="text-accent">₹499</b> · 1-year · 12 reports</div>
             </div>
