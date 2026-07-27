@@ -358,8 +358,14 @@ export default function Landing() {
 
       <footer className="py-12 text-center text-xs text-muted-foreground">
         <div>© 2026 Seller Margin — Amazon P&amp;L Reconciliation. Made with care for sellers.</div>
-        <div className="mt-2">
-          Need help? <a href={whatsappLink()} target="_blank" rel="noreferrer noopener" className="text-primary hover:underline" data-testid="footer-wa-link">WhatsApp +91 89108 71321</a>
+        <div className="mt-3 flex flex-wrap justify-center gap-4">
+          <Link to="/terms" className="hover:text-primary" data-testid="footer-terms">Terms &amp; Conditions</Link>
+          <span className="text-border">·</span>
+          <Link to="/refunds" className="hover:text-primary" data-testid="footer-refunds">Refund &amp; Cancellation</Link>
+          <span className="text-border">·</span>
+          <Link to="/contact" className="hover:text-primary" data-testid="footer-contact">Contact us</Link>
+          <span className="text-border">·</span>
+          <a href={whatsappLink()} target="_blank" rel="noreferrer noopener" className="text-primary hover:underline" data-testid="footer-wa-link">WhatsApp +91 89108 71321</a>
         </div>
       </footer>
 
