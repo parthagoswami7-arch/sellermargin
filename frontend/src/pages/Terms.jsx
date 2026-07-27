@@ -15,71 +15,87 @@ export default function Terms() {
         </div>
       </header>
 
-      <main className="max-w-[900px] mx-auto px-8 py-16 legal-content">
+      <main className="max-w-[900px] mx-auto px-8 py-16">
         <div className="label-caps mb-4">Legal</div>
         <h1 className="font-serif text-5xl tracking-tight mb-2">Terms &amp; Conditions</h1>
-        <p className="text-sm text-muted-foreground mb-12">Effective from 27 February 2026 · Last updated 27 February 2026</p>
+        <p className="text-sm text-muted-foreground mb-10">Effective from 27 February 2026 · Last updated 27 February 2026</p>
 
-        <Section n="1" title="Who we are">
-          <p>Seller Margin ("Service", "we", "us", "our") is a Software-as-a-Service (SaaS) product operated by <b>Ahans International</b>, an entity registered in Kolkata, West Bengal, India ("Company"). The Service provides Amazon India sellers with a monthly Profit &amp; Loss (P&amp;L) reconciliation tool. By creating an account or purchasing a plan, you ("User", "you") agree to these Terms in full.</p>
+        <p className="text-[15px] leading-relaxed text-muted-foreground mb-12">
+          These Terms &amp; Conditions ("Terms") govern access to and use of Seller Margin (the "Service"), operated by <b>Ahan's International</b> ("we," "us," "our"), available at <span className="font-mono">sellermargin.in</span>. By creating an account or using the Service, you agree to these Terms.
+        </p>
+
+        <Section n="1" title="What the Service does">
+          <p>
+            Seller Margin lets Amazon sellers upload reports downloaded from Amazon Seller Central and generates a monthly profit &amp; loss reconciliation, including revenue, fees, advertising cost, cost of goods sold, and return handling. Uploaded files are processed to generate this output on your behalf.
+          </p>
         </Section>
 
-        <Section n="2" title="Eligibility">
-          <p>You must be at least 18 years old, legally competent to enter contracts under Indian law, and using the Service for a legitimate business purpose. If you're using the Service on behalf of a company, you represent that you have authority to bind that company to these Terms.</p>
+        <Section n="2" title="Accounts">
+          <p>
+            You must provide accurate information when signing in and are responsible for activity under your account. Notify us immediately at <a href="mailto:support@sellermargin.in" className="text-primary underline">support@sellermargin.in</a> if you suspect unauthorised use.
+          </p>
         </Section>
 
-        <Section n="3" title="Account &amp; access">
-          <p>You sign in using your Google account. You are responsible for keeping your Google credentials secure. Any activity on your account is your responsibility. Do not share your account, activation code, or invoice link with third parties — each paid plan is licensed to a single seller.</p>
+        <Section n="3" title="Plans, trials, and report limits">
+          <p>
+            Access is offered under paid plans (currently a <b>7-day / 1-report plan</b> and an <b>annual / 12-report plan</b>, as shown on our pricing page). Each plan includes a fixed number of report generations. Regenerating a report for a month you've already generated does not consume an additional report credit. Plan prices, inclusions, and durations may change for future purchases; changes do not apply retroactively to an active plan you've already paid for.
+          </p>
         </Section>
 
-        <Section n="4" title="Plans, pricing &amp; GST">
+        <Section n="4" title="Payments">
+          <p>
+            Payments are processed through <b>Cashfree Payments</b>, a licensed payment aggregator. We do not store your card, UPI, or bank details. All prices are in INR and inclusive of applicable GST, shown at checkout.
+          </p>
+        </Section>
+
+        <Section n="5" title="Your data and uploaded files">
+          <p>
+            You upload Amazon reports containing your sales, returns, fees, and SKU-level data. This data is stored securely, used only for computing your P&amp;L and displaying it back to you, and never shared with any third party. See our Privacy statement for full details. You may request full deletion of your account and data by emailing <a href="mailto:support@sellermargin.in" className="text-primary underline">support@sellermargin.in</a>.
+          </p>
+        </Section>
+
+        <Section n="6" title="Accuracy of reports">
+          <p>
+            Seller Margin applies a consistent reconciliation methodology (order filtering, fee matching, cost calculations) to the files you provide. Report accuracy depends on the completeness and correctness of the files you upload and cost prices you enter. Seller Margin is a reconciliation tool, <b>not tax, accounting, or legal advice</b> — please verify figures before relying on them for statutory filings.
+          </p>
+        </Section>
+
+        <Section n="7" title="Acceptable use">
           <ul className="list-disc list-inside space-y-2">
-            <li><b>7-Day Trial:</b> ₹49 + 18% GST, 1 report included</li>
-            <li><b>1-Year Access:</b> ₹499 + 18% GST, 12 reports included, valid 365 days from purchase</li>
-            <li><b>5 Extra Reports Top-up:</b> ₹249 + 18% GST, does not extend your access period</li>
+            <li>Don't attempt to circumvent report/plan limits through automated abuse, multiple accounts, or credential sharing intended to bypass per-seller licensing.</li>
+            <li>Don't upload files you do not have the right to use.</li>
+            <li>Don't attempt to reverse-engineer, scrape, or interfere with the Service's normal operation.</li>
           </ul>
-          <p>Prices are quoted in Indian Rupees (INR) and are exclusive of applicable GST. GST is charged at the prevailing rate (currently 18%) as CGST + SGST when your billing state matches ours, else IGST. A GST-compliant tax invoice is issued and emailed on every successful purchase.</p>
-          <p>Pricing may change with 15 days' prior notice via email or on-site announcement. Ongoing subscriptions honour the price at the time of purchase for their remaining validity.</p>
         </Section>
 
-        <Section n="5" title="Report quota">
-          <p>One "report" is defined as one calendar month's reconciliation for a specific (month, year) combination. Regenerating the same month is free and does not consume additional quota. Deleting a report frees its quota slot. Unused reports carry forward when you renew or top up. Any attempt to circumvent quota limits — including but not limited to sharing accounts with other sellers or using automated tools — may result in immediate account suspension without refund.</p>
+        <Section n="8" title="Limitation of liability">
+          <p>
+            The Service is provided "as is." To the maximum extent permitted by law, Ahan's International is not liable for indirect, incidental, or consequential damages arising from use of the Service, including decisions made based on generated reports. Our total liability for any claim is limited to the amount you paid for the plan giving rise to the claim.
+          </p>
         </Section>
 
-        <Section n="6" title="Payment processing">
-          <p>All payments are processed via Cashfree Payment Gateway. We do not store your card, UPI, or netbanking credentials on our servers. Payment failures, chargebacks, and refunds are handled per the Refund &amp; Cancellation Policy (see separate page).</p>
+        <Section n="9" title="Termination">
+          <p>
+            We may suspend or terminate access for violation of these Terms. You may stop using the Service at any time; see our <Link to="/refunds" className="text-primary underline">Refund &amp; Cancellation Policy</Link> for details on plan cancellation.
+          </p>
         </Section>
 
-        <Section n="7" title="Use of your data">
-          <p>You upload Amazon reports containing your sales, returns, fees, and SKU-level data. This data is stored securely, used only for computing your P&amp;L and displaying it back to you, and never shared with any third party. See our Privacy statement for full details. You may request full deletion of your account and data by emailing <a href="mailto:support@sellermargin.in" className="text-primary underline">support@sellermargin.in</a>.</p>
+        <Section n="10" title="Governing law">
+          <p>
+            These Terms are governed by the laws of India. Any disputes are subject to the exclusive jurisdiction of the courts of <b>Kolkata, India</b>.
+          </p>
         </Section>
 
-        <Section n="8" title="Acceptable use">
-          <p>You agree NOT to: (a) reverse-engineer, decompile, or copy the Service; (b) use the Service to process data you don't legally own or have authorization to process; (c) scrape, spam, or overload our servers; (d) resell or sub-license the Service without a written agreement.</p>
+        <Section n="11" title="Changes to these Terms">
+          <p>
+            We may update these Terms from time to time. Continued use of the Service after changes take effect constitutes acceptance of the revised Terms.
+          </p>
         </Section>
 
-        <Section n="9" title="Availability &amp; support">
-          <p>The Service is provided on an "as-is, as-available" basis. We aim for 99% uptime but do not commit to any specific SLA. Support is available via WhatsApp (+91 89108 71321) and email (<a href="mailto:support@sellermargin.in" className="text-primary underline">support@sellermargin.in</a>), Mon–Sat 10 AM – 8 PM IST.</p>
-        </Section>
-
-        <Section n="10" title="Limitation of liability">
-          <p>The P&amp;L computations produced by the Service are for informational purposes only. You are solely responsible for filing accurate tax returns, GST returns, and any regulatory filings. Under no circumstance shall the Company be liable for direct, indirect, incidental, or consequential damages arising from your use of the Service. Our aggregate liability under these Terms is capped at the total fees you paid in the 3 months preceding the claim.</p>
-        </Section>
-
-        <Section n="11" title="Termination">
-          <p>You may cancel your account any time by emailing us. We may suspend or terminate your account for breach of these Terms, non-payment, fraudulent activity, or reasonable suspicion of misuse. Termination for cause does not entitle you to a refund of unused fees.</p>
-        </Section>
-
-        <Section n="12" title="Governing law &amp; jurisdiction">
-          <p>These Terms are governed by the laws of India. Any dispute shall be subject to the exclusive jurisdiction of the courts in Kolkata, West Bengal.</p>
-        </Section>
-
-        <Section n="13" title="Changes to these Terms">
-          <p>We may update these Terms from time to time. Material changes will be notified via email at least 15 days in advance. Continued use of the Service after the effective date constitutes acceptance of the revised Terms.</p>
-        </Section>
-
-        <Section n="14" title="Contact">
-          <p>For any question about these Terms, write to <a href="mailto:support@sellermargin.in" className="text-primary underline">support@sellermargin.in</a> or WhatsApp us at <b>+91 89108 71321</b>.</p>
+        <Section n="12" title="Contact">
+          <p>
+            Questions about these Terms: <a href="mailto:support@sellermargin.in" className="text-primary underline">support@sellermargin.in</a> or WhatsApp <b>+91 89108 71321</b>.
+          </p>
         </Section>
       </main>
 
