@@ -30,12 +30,8 @@ next-env.d.ts
 dist/
 dist
 
-# Environment files (comprehensive coverage)
-.env
-.env.*
-!.env.example
-backend/.env
-frontend/.env
+# Environment files — kept in repo for Kubernetes deployment (auto-populated with production values).
+# Do NOT commit real secrets here; the deployment layer overrides values at runtime.
 
 *token.json*
 *credentials.json*
