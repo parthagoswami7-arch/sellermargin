@@ -236,13 +236,18 @@ async def upsert_cost(cp: CostPrice, user: dict = Depends(current_user)):
 
 @api.post("/cost-prices/bulk")
 async def bulk_costs(items: list[CostPrice], user: dict = Depends(current_user)):
-    for cp in items:
-        await db.cost_prices.update_one(
+    if not items:
+        return {"ok": True, "count": 0}
+    ops = [
+        UpdateOne(
             {"user_id": user["user_id"], "sku": cp.sku},
             {"$set": {"cost_price": float(cp.cost_price), "product_name": cp.product_name or "", "updated_at": now_utc()},
              "$setOnInsert": {"user_id": user["user_id"], "sku": cp.sku, "created_at": now_utc()}},
             upsert=True,
         )
+        for cp in items
+    ]
+    await db.cost_prices.bulk_write(ops, ordered=False)
     return {"ok": True, "count": len(items)}
 
 @api.post("/cost-prices/import-csv")
@@ -259,6 +264,7 @@ async def import_costs_csv(file: UploadFile = File(...), user: dict = Depends(cu
     added = 0
     skipped = 0
     errors: list[str] = []
+    ops: list[UpdateOne] = []
     for i, row in enumerate(reader, start=2):
         # case-insensitive col lookup
         lc = {k.strip().lower(): (v or "").strip() for k, v in row.items() if k}
@@ -274,13 +280,15 @@ async def import_costs_csv(file: UploadFile = File(...), user: dict = Depends(cu
             errors.append(f"row {i}: bad cost '{cp}'")
             skipped += 1
             continue
-        await db.cost_prices.update_one(
+        ops.append(UpdateOne(
             {"user_id": user["user_id"], "sku": sku},
             {"$set": {"cost_price": price, "product_name": pn, "updated_at": now_utc()},
              "$setOnInsert": {"user_id": user["user_id"], "sku": sku, "created_at": now_utc()}},
             upsert=True,
-        )
+        ))
         added += 1
+    if ops:
+        await db.cost_prices.bulk_write(ops, ordered=False)
     return {"added": added, "skipped": skipped, "errors": errors[:20]}
 
 # ---------------- reports ----------------
@@ -414,13 +422,17 @@ class SetCostsPayload(BaseModel):
 async def set_costs(rid: str, payload: SetCostsPayload, user: dict = Depends(current_user)):
     """Persist SKU costs to user's library AND apply defaults to this report's rows."""
     r = await _get_report(rid, user)
-    for c in payload.costs:
-        await db.cost_prices.update_one(
-            {"user_id": user["user_id"], "sku": c.sku},
-            {"$set": {"cost_price": float(c.cost_price), "product_name": c.product_name or "", "updated_at": now_utc()},
-             "$setOnInsert": {"user_id": user["user_id"], "sku": c.sku, "created_at": now_utc()}},
-            upsert=True,
-        )
+    if payload.costs:
+        ops = [
+            UpdateOne(
+                {"user_id": user["user_id"], "sku": c.sku},
+                {"$set": {"cost_price": float(c.cost_price), "product_name": c.product_name or "", "updated_at": now_utc()},
+                 "$setOnInsert": {"user_id": user["user_id"], "sku": c.sku, "created_at": now_utc()}},
+                upsert=True,
+            )
+            for c in payload.costs
+        ]
+        await db.cost_prices.bulk_write(ops, ordered=False)
     cost_map = {c.sku: float(c.cost_price) for c in payload.costs}
     rows = r.get("rows") or []
     for row in rows:
@@ -630,7 +642,7 @@ async def public_plans():
 from cashfree import cf_create_order, cf_get_order, cf_verify_webhook, send_activation_email
 from invoice import (SELLER_DEFAULTS, STATE_CODES, compute_gst, build_invoice_number,
                      render_invoice_pdf)
-from pymongo import ReturnDocument
+from pymongo import ReturnDocument, UpdateOne
 
 PUBLIC_APP_URL = os.environ.get("PUBLIC_APP_URL", "").rstrip("/")
 
