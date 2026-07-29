@@ -21,7 +21,7 @@ export default function Terms() {
         <p className="text-sm text-muted-foreground mb-10">Effective from 27 February 2026 · Last updated 27 February 2026</p>
 
         <p className="text-[15px] leading-relaxed text-muted-foreground mb-12">
-          These Terms &amp; Conditions ("Terms") govern access to and use of Seller Margin (the "Service"), operated by <b>Ahan's International</b> ("we," "us," "our"), available at <span className="font-mono">sellermargin.in</span>. By creating an account or using the Service, you agree to these Terms.
+          These Terms &amp; Conditions ("Terms") govern access to and use of Seller Margin (the "Service"), operated by <b>COMTOP</b> ("we," "us," "our"), available at <span className="font-mono">sellermargin.in</span>. By creating an account or using the Service, you agree to these Terms.
         </p>
 
         <Section n="1" title="What the Service does">

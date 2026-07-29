@@ -59,12 +59,12 @@ export default function ContactUs() {
           <div className="p-6">
             <MapPin size={16} className="text-primary mb-3"/>
             <div className="label-caps mb-2">Registered office</div>
-            <div className="text-sm">Ahans International<br/>Kolkata, West Bengal, India</div>
+            <div className="text-sm">COMTOP<br/>Kolkata, West Bengal, India</div>
           </div>
         </div>
 
         <div className="mt-12 pt-8 border-t border-border text-xs text-muted-foreground">
-          <p>Business name: <b>Ahans International</b> · GSTIN available on request via email. For grievance or escalation, mark your email subject with <span className="font-mono">GRIEVANCE</span> and we'll respond within 2 business days.</p>
+          <p>Business name: <b>COMTOP</b> · GSTIN available on request via email. For grievance or escalation, mark your email subject with <span className="font-mono">GRIEVANCE</span> and we'll respond within 2 business days.</p>
         </div>
       </main>
 
