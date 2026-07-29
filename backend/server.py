@@ -393,7 +393,7 @@ async def build_report_rows(rid: str, user: dict = Depends(current_user)):
     if "orders" not in raw:
         raise HTTPException(400, "All Orders report is required")
 
-    costs_docs = await db.cost_prices.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(length=100000)
+    costs_docs = await db.cost_prices.find({"user_id": user["user_id"]}, {"_id": 0}).to_list(length=5000)
     cost_map = {d["sku"]: float(d["cost_price"]) for d in costs_docs}
 
     rows = build_rows(
