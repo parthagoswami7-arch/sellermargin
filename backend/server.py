@@ -520,7 +520,7 @@ PLANS = {
     "topup_5":  {"id": "topup_5",  "days": 0,   "price_inr": 249, "label": "5 Extra Reports", "amount": 3.0,  "currency": "usd", "gst_pct": 18, "reports_quota": 5,  "available": True, "is_topup": True},
 }
 
-# Cards shown as "Coming soon" — not yet purchasable through Cashfree.
+# Cards shown as "Coming soon" — not yet purchasable through Razorpay.
 UPCOMING_PLANS = {
     "agency_starter": {"id": "agency_starter", "days": 365, "price_inr": 1999,
                        "label": "Agency Starter", "gst_pct": 18, "reports_quota": 60,
@@ -634,8 +634,14 @@ async def public_plans():
     return {"plans": PLANS, "upcoming_plans": UPCOMING_PLANS}
 
 
-# ---------------- Cashfree checkout ----------------
-from cashfree import cf_create_order, cf_get_order, cf_verify_webhook, send_activation_email
+# ---------------- Razorpay checkout ----------------
+from razorpay_pay import (create_order as rzp_create_order,
+                          fetch_order as rzp_fetch_order,
+                          fetch_payment as rzp_fetch_payment,
+                          verify_checkout_signature as rzp_verify_checkout,
+                          verify_webhook_signature as rzp_verify_webhook,
+                          RAZORPAY_KEY_ID)
+from emailer import send_activation_email
 from invoice import (SELLER_DEFAULTS, STATE_CODES, compute_gst, build_invoice_number,
                      render_invoice_pdf)
 from pymongo import ReturnDocument, UpdateOne
@@ -675,47 +681,54 @@ class CheckoutOrderReq(BaseModel):
     buyer_billing_address: Optional[str] = None
     buyer_state: Optional[str] = None
 
-@api.post("/payments/cf/create-order")
-async def cf_create(payload: CheckoutOrderReq, user: dict = Depends(current_user)):
+@api.post("/payments/rzp/create-order")
+async def rzp_create(payload: CheckoutOrderReq, user: dict = Depends(current_user)):
     plan = PLANS.get(payload.plan)
     if not plan:
         raise HTTPException(400, "Unknown plan")
     seller = await get_seller_settings()
     gst = compute_gst(plan["price_inr"], payload.buyer_state, seller["state"])
     order_id = f"sm_{plan['id']}_{uuid.uuid4().hex[:10]}"
-    return_url = f"{PUBLIC_APP_URL}/payment/success?order_id={order_id}"
-    notify_url = f"{PUBLIC_APP_URL}/api/webhook/cashfree"
+    amount_paise = int(round(float(gst["total"]) * 100))
     try:
-        cf = await cf_create_order(order_id, gst["total"],
-            {"id": user["user_id"], "name": user.get("name") or user["email"].split("@")[0],
-             "email": user["email"], "phone": payload.phone or "9999999999"},
-            return_url, notify_url)
+        rzp = rzp_create_order(
+            amount_paise=amount_paise,
+            receipt=order_id,
+            notes={"user_id": user["user_id"], "user_email": user["email"], "plan": plan["id"]},
+        )
     except Exception as e:
-        raise HTTPException(502, f"Cashfree error: {e}")
-    await db.cf_orders.insert_one({
-        "order_id": order_id, "cf_order_id": cf.get("cf_order_id"),
-        "payment_session_id": cf["payment_session_id"],
+        raise HTTPException(502, f"Razorpay error: {e}")
+    await db.orders.insert_one({
+        "order_id": order_id,
+        "razorpay_order_id": rzp.get("id"),
         "user_id": user["user_id"], "user_email": user["email"],
         "plan": plan["id"],
-        # Amount fields — `amount` retained for backwards-compat = total charged
         "amount": gst["total"],
+        "amount_paise": amount_paise,
         "base_amount": gst["base"],
         "gst": {"cgst": gst["cgst"], "sgst": gst["sgst"], "igst": gst["igst"],
                 "cgst_pct": gst["cgst_pct"], "sgst_pct": gst["sgst_pct"], "igst_pct": gst["igst_pct"],
                 "total_tax": gst["total_tax"], "intra_state": gst["intra_state"]},
         "currency": "INR",
-        # GST invoice buyer details (optional)
         "wants_invoice": bool(payload.wants_invoice),
         "buyer_name": payload.buyer_name,
         "buyer_gstin": (payload.buyer_gstin or "").strip().upper() or None,
         "buyer_billing_address": payload.buyer_billing_address,
         "buyer_state": payload.buyer_state,
-        "status": cf.get("order_status", "ACTIVE"), "code_delivered": False,
+        "status": rzp.get("status", "created"), "code_delivered": False,
         "created_at": now_utc(), "updated_at": now_utc(),
     })
     return {
-        "order_id": order_id, "payment_session_id": cf["payment_session_id"],
-        "env": os.environ.get("CF_ENV", "sandbox"),
+        "order_id": order_id,
+        "razorpay_order_id": rzp.get("id"),
+        "razorpay_key_id": RAZORPAY_KEY_ID,
+        "amount_paise": amount_paise,
+        "currency": "INR",
+        "buyer": {
+            "name": payload.buyer_name or (user.get("name") or user["email"].split("@")[0]),
+            "email": user["email"],
+            "phone": (payload.phone or ""),
+        },
         "amount_breakdown": {
             "base": gst["base"], "total_tax": gst["total_tax"], "total": gst["total"],
             "cgst": gst["cgst"], "sgst": gst["sgst"], "igst": gst["igst"],
@@ -724,32 +737,35 @@ async def cf_create(payload: CheckoutOrderReq, user: dict = Depends(current_user
     }
 
 async def _fulfill_order_if_paid(order_id: str) -> dict:
-    """Idempotently: if the Cashfree order is PAID and we haven't fulfilled yet,
+    """Idempotently: if the Razorpay order is PAID and we haven't fulfilled yet,
     generate a code, redeem it for the buyer, and email them."""
-    rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+    rec = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "Order not found")
     # If already fulfilled, just return current state
     if rec.get("code_delivered"):
         return {"status": rec["status"], "code": rec.get("code"), "paid": True}
-    # Verify with Cashfree
+    # Verify with Razorpay: order is paid when order.status == "paid"
+    rzp_order_id = rec.get("razorpay_order_id")
+    if not rzp_order_id:
+        raise HTTPException(500, "Missing razorpay_order_id on order")
     try:
-        cf = await cf_get_order(order_id)
+        rzp = rzp_fetch_order(rzp_order_id)
     except Exception as e:
-        raise HTTPException(502, f"Cashfree verify error: {e}")
-    status = cf.get("order_status")
-    await db.cf_orders.update_one({"order_id": order_id},
+        raise HTTPException(502, f"Razorpay verify error: {e}")
+    status = rzp.get("status")  # "created" | "attempted" | "paid"
+    await db.orders.update_one({"order_id": order_id},
         {"$set": {"status": status, "updated_at": now_utc()}})
-    if status != "PAID":
+    if status != "paid":
         return {"status": status, "paid": False}
 
     # Atomically mark delivered so a webhook + poll can't double-fulfill
-    upd = await db.cf_orders.update_one(
+    upd = await db.orders.update_one(
         {"order_id": order_id, "code_delivered": {"$ne": True}},
         {"$set": {"code_delivered": True, "delivered_at": now_utc()}},
     )
     if upd.modified_count == 0:
-        rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+        rec = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
         return {"status": "PAID", "code": rec.get("code"), "paid": True}
 
     # Generate + record + auto-redeem for the buyer
@@ -759,7 +775,7 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
         "code": code, "plan": rec["plan"], "status": "used",
         "used_by": rec["user_id"], "used_by_email": rec["user_email"],
         "used_at": now_utc(), "created_at": now_utc(),
-        "source": "cashfree", "order_id": order_id,
+        "source": "razorpay", "order_id": order_id,
     })
     buyer = await db.users.find_one({"user_id": rec["user_id"]}, {"_id": 0})
     set_update = {"last_paid_at": now_utc(), "last_plan": plan["id"]}
@@ -769,7 +785,6 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
         set_update["is_paid"] = True
         set_update["paid_until"] = new_expiry
     else:
-        # Topups don't extend access — reuse whatever expiry the buyer already has (if any)
         raw = buyer.get("paid_until") if buyer else None
         if isinstance(raw, str):
             raw = datetime.fromisoformat(raw)
@@ -778,19 +793,12 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
         {"$set": set_update,
          "$inc": {"reports_quota": int(plan.get("reports_quota") or 0)}})
 
-    # Always generate an invoice on successful payment (buyer can pick it up whether or not they
-    # provided GSTIN — unregistered buyers just get an invoice with "Unregistered" printed).
     now = now_utc()
     seq = await _next_invoice_seq(now)
     invoice_no = build_invoice_number(seq, now)
-    cf_payment_id = None
-    try:
-        cf_payment_id = cf.get("cf_order_id") if cf else None
-    except Exception:
-        cf_payment_id = None
     invoice_url = f"{PUBLIC_APP_URL}/api/invoices/{order_id}.pdf?token={_sign_invoice_token(order_id)}" if PUBLIC_APP_URL else None
 
-    await db.cf_orders.update_one({"order_id": order_id},
+    await db.orders.update_one({"order_id": order_id},
         {"$set": {"code": code, "paid_until": new_expiry,
                   "invoice_no": invoice_no, "invoice_url": invoice_url,
                   "invoice_generated_at": now}})
@@ -802,8 +810,7 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
         days=plan["days"], site_url=PUBLIC_APP_URL, expiry_iso=expiry_iso_safe,
         invoice_url=invoice_url, invoice_no=invoice_no, gst_total=float(gst_total),
     )
-    # Store email delivery state separately from code_delivered so admins can retry
-    await db.cf_orders.update_one({"order_id": order_id},
+    await db.orders.update_one({"order_id": order_id},
         {"$set": {
             "email_sent":     bool(email_result.get("ok")),
             "email_send_id":  email_result.get("id"),
@@ -817,54 +824,83 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
             "is_topup": bool(plan.get("is_topup")),
             "email_sent": bool(email_result.get("ok"))}
 
-@api.get("/payments/cf/verify/{order_id}")
-async def cf_verify(order_id: str, user: dict = Depends(current_user)):
-    rec = await db.cf_orders.find_one({"order_id": order_id, "user_id": user["user_id"]}, {"_id": 0})
+
+class RzpVerifyReq(BaseModel):
+    order_id: str
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+
+@api.post("/payments/rzp/verify")
+async def rzp_verify(payload: RzpVerifyReq, user: dict = Depends(current_user)):
+    """Verify checkout signature returned by Razorpay JS + fulfill order (idempotent)."""
+    rec = await db.orders.find_one(
+        {"order_id": payload.order_id, "user_id": user["user_id"]}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "Order not found")
-    result = await _fulfill_order_if_paid(order_id)
-    return result
+    if rec.get("razorpay_order_id") != payload.razorpay_order_id:
+        raise HTTPException(400, "Razorpay order id mismatch")
+    if not rzp_verify_checkout(payload.razorpay_order_id, payload.razorpay_payment_id, payload.razorpay_signature):
+        raise HTTPException(400, "Invalid Razorpay signature")
+    await db.orders.update_one(
+        {"order_id": payload.order_id},
+        {"$set": {"razorpay_payment_id": payload.razorpay_payment_id,
+                  "razorpay_signature":  payload.razorpay_signature,
+                  "updated_at": now_utc()}})
+    return await _fulfill_order_if_paid(payload.order_id)
 
-@app.post("/api/webhook/cashfree")
-async def cf_webhook(request: Request):
-    """Cashfree webhook. Always returns 200 so the Cashfree dashboard 'Test' passes.
-    Fulfillment only runs when the signature is valid AND Cashfree confirms the order
-    is PAID via cf_get_order() (which uses our own credentials — attackers can't forge)."""
+
+@app.post("/api/webhook/razorpay")
+async def rzp_webhook(request: Request):
+    """Razorpay webhook. Always returns 200 so the dashboard 'Test' passes.
+    Fulfillment only runs when the signature is valid AND Razorpay confirms the order
+    is 'paid' via order.fetch (which uses our own credentials — attackers can't forge)."""
     raw = await request.body()
-    sig = request.headers.get("x-webhook-signature", "")
-    ts  = request.headers.get("x-webhook-timestamp", "")
-    sig_ok = cf_verify_webhook(raw, sig, ts)
+    sig = request.headers.get("x-razorpay-signature", "") or request.headers.get("X-Razorpay-Signature", "")
+    sig_ok = rzp_verify_webhook(raw, sig)
     if not sig_ok:
-        print(f"[cf-webhook] signature mismatch  ts={ts!r}  sig={sig[:16]!r}...  bytes={len(raw)}")
+        print(f"[rzp-webhook] signature mismatch  sig={sig[:16]!r}...  bytes={len(raw)}")
         return {"ok": True, "verified": False}
     try:
         payload = json.loads(raw)
     except Exception:
-        print("[cf-webhook] signed but invalid JSON body")
+        print("[rzp-webhook] signed but invalid JSON body")
         return {"ok": True, "verified": True, "json": False}
-    order_id = payload.get("data", {}).get("order", {}).get("order_id")
-    if order_id:
-        try:
-            await _fulfill_order_if_paid(order_id)
-        except Exception as e:
-            print("[cf-webhook] fulfill error:", e)
-    return {"ok": True, "verified": True}
+    event = payload.get("event", "")
+    # payment.captured → payload.data.payment.entity.order_id ties to our order
+    entity = (payload.get("payload", {}).get("payment", {}).get("entity")
+              or payload.get("payload", {}).get("order", {}).get("entity")
+              or {})
+    rzp_order_id = entity.get("order_id") or entity.get("id")
+    if rzp_order_id:
+        rec = await db.orders.find_one({"razorpay_order_id": rzp_order_id}, {"_id": 0})
+        if rec:
+            try:
+                await _fulfill_order_if_paid(rec["order_id"])
+            except Exception as e:
+                print("[rzp-webhook] fulfill error:", e)
+    return {"ok": True, "verified": True, "event": event}
 
 @api.get("/admin/orders")
 async def admin_orders(_: dict = Depends(require_admin)):
-    docs = await db.cf_orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=500)
+    docs = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=500)
     return {"orders": docs}
 
 
-@api.get("/admin/cf-config")
-async def admin_cf_config(_: dict = Depends(require_admin)):
-    """Return current Cashfree environment info so the Admin UI can prompt the operator
-    to whitelist the correct domain in the Cashfree merchant dashboard."""
+@api.get("/admin/rzp-config")
+async def admin_rzp_config(_: dict = Depends(require_admin)):
+    """Return current Razorpay config so the Admin UI can guide the operator
+    on webhook setup."""
+    key_id = os.environ.get("RAZORPAY_KEY_ID", "")
     return {
-        "cf_env": os.environ.get("CF_ENV", "sandbox"),
+        "mode": "live" if key_id.startswith("rzp_live_") else ("test" if key_id.startswith("rzp_test_") else "unknown"),
+        "key_id": key_id,
+        "webhook_configured": bool(os.environ.get("RAZORPAY_WEBHOOK_SECRET", "")),
         "public_app_url": PUBLIC_APP_URL or "",
-        "whitelist_url": "https://merchant.cashfree.com/merchants/pg/developers/whitelisting",
-        "webhook_url": (f"{PUBLIC_APP_URL}/api/webhook/cashfree" if PUBLIC_APP_URL else ""),
+        "dashboard_url": "https://dashboard.razorpay.com/",
+        "webhooks_url": "https://dashboard.razorpay.com/app/webhooks",
+        "webhook_url": (f"{PUBLIC_APP_URL}/api/webhook/razorpay" if PUBLIC_APP_URL else ""),
     }
 
 
@@ -873,7 +909,7 @@ async def admin_resend_email(order_id: str, _: dict = Depends(require_admin)):
     """Resend the post-purchase activation email for a PAID order. Uses the existing
     code + invoice from the order. Common cases: buyer says they never got the email,
     buyer's spam filter ate it, buyer wants it forwarded to a different address."""
-    rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+    rec = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "Order not found")
     if not rec.get("code_delivered"):
@@ -893,7 +929,7 @@ async def admin_resend_email(order_id: str, _: dict = Depends(require_admin)):
         expiry_iso=expiry_iso, invoice_url=invoice_url, invoice_no=invoice_no,
         gst_total=float(rec.get("amount") or 0),
     )
-    await db.cf_orders.update_one({"order_id": order_id},
+    await db.orders.update_one({"order_id": order_id},
         {"$set": {
             "email_sent": bool(result.get("ok")),
             "email_send_id": result.get("id"),
@@ -907,7 +943,7 @@ async def admin_resend_email(order_id: str, _: dict = Depends(require_admin)):
 
 @api.delete("/admin/orders/{order_id}")
 async def admin_delete_order(order_id: str, admin: dict = Depends(require_admin)):
-    rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+    rec = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "Order not found")
 
@@ -928,7 +964,7 @@ async def admin_delete_order(order_id: str, admin: dict = Depends(require_admin)
     if rec.get("code"):
         await db.activation_codes.delete_one({"code": rec["code"]})
 
-    await db.cf_orders.delete_one({"order_id": order_id})
+    await db.orders.delete_one({"order_id": order_id})
     return {
         "ok": True,
         "order_id": order_id,
@@ -946,7 +982,7 @@ from gst_exports import build_sales_csv, build_gstr1_excel
 async def admin_export_sales_csv(from_date: Optional[str] = None,
                                  to_date: Optional[str] = None,
                                  _: dict = Depends(require_admin)):
-    """Sales CSV of all PAID Cashfree orders in [from_date, to_date] (ISO YYYY-MM-DD).
+    """Sales CSV of all PAID orders in [from_date, to_date] (ISO YYYY-MM-DD).
     Both bounds inclusive. Omit both to get everything."""
     q: dict = {"code_delivered": True}
     if from_date or to_date:
@@ -956,7 +992,7 @@ async def admin_export_sales_csv(from_date: Optional[str] = None,
         if to_date:
             rng["$lte"] = datetime.fromisoformat(to_date).replace(tzinfo=timezone.utc) + timedelta(days=1)
         q["invoice_generated_at"] = rng
-    orders = await db.cf_orders.find(q, {"_id": 0}).sort("invoice_generated_at", 1).to_list(length=5000)
+    orders = await db.orders.find(q, {"_id": 0}).sort("invoice_generated_at", 1).to_list(length=5000)
     seller = await get_seller_settings()
     csv_bytes = build_sales_csv(orders, seller)
     tag = f"{from_date or 'all'}_to_{to_date or 'now'}"
@@ -977,7 +1013,7 @@ async def admin_export_gstr1(month: int, year: int, _: dict = Depends(require_ad
         end = datetime(year + 1, 1, 1, tzinfo=timezone.utc)
     else:
         end = datetime(year, month + 1, 1, tzinfo=timezone.utc)
-    orders = await db.cf_orders.find(
+    orders = await db.orders.find(
         {"code_delivered": True, "invoice_generated_at": {"$gte": start, "$lt": end}},
         {"_id": 0},
     ).sort("invoice_generated_at", 1).to_list(length=5000)
@@ -1009,7 +1045,7 @@ async def admin_export_summary(_: dict = Depends(require_admin)):
     fy_start = datetime(fy_year, 4, 1, tzinfo=timezone.utc)
 
     async def _sum(q):
-        docs = await db.cf_orders.find(q, {"_id": 0, "base_amount": 1, "amount": 1, "gst": 1}).to_list(length=10000)
+        docs = await db.orders.find(q, {"_id": 0, "base_amount": 1, "amount": 1, "gst": 1}).to_list(length=10000)
         gross = sum(float(d.get("amount") or 0) for d in docs)
         taxable = sum(float(d.get("base_amount") or 0) for d in docs)
         gst = sum(float((d.get("gst") or {}).get("total_tax") or 0) for d in docs)
@@ -1033,7 +1069,7 @@ def _sign_invoice_token(order_id: str) -> str:
 # ---------------- GST Invoice download ----------------
 @api.get("/invoices/{order_id}.pdf")
 async def download_invoice(order_id: str, request: Request, token: Optional[str] = None):
-    rec = await db.cf_orders.find_one({"order_id": order_id}, {"_id": 0})
+    rec = await db.orders.find_one({"order_id": order_id}, {"_id": 0})
     if not rec:
         raise HTTPException(404, "Order not found")
     # Authorize: either signed token from the emailed link, or logged-in buyer/admin
@@ -1075,7 +1111,7 @@ async def download_invoice(order_id: str, request: Request, token: Optional[str]
     pdf = render_invoice_pdf(
         invoice_no=rec.get("invoice_no") or "SM/DRAFT/0000",
         invoice_date=inv_date, order_id=order_id,
-        cf_payment_id=rec.get("cf_order_id"),
+        cf_payment_id=rec.get("razorpay_payment_id"),
         seller=seller, buyer=buyer,
         plan_label=plan.get("label", rec.get("plan", "")),
         plan_days=int(plan.get("days", 0) or 0),
@@ -1142,7 +1178,7 @@ async def admin_stats(_: dict = Depends(require_admin)):
     paid_users = await db.users.count_documents({"is_paid": True})
     trial_users = total_users - paid_users
     total_reports = await db.reports.count_documents({})
-    revenue_cursor = db.cf_orders.find({"status": "PAID"}, {"_id": 0, "amount": 1})
+    revenue_cursor = db.orders.find({"status": "PAID"}, {"_id": 0, "amount": 1})
     revenue = 0.0
     async for r in revenue_cursor:
         revenue += float(r.get("amount", 0) or 0)

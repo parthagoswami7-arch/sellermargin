@@ -239,7 +239,7 @@ def render_invoice_pdf(*, invoice_no: str, invoice_date: datetime,
 
     notes = (
         "1. This is a digitally generated tax invoice and does not require a signature.<br/>"
-        "2. Payment received via online payment gateway (Cashfree). No refund of GST on cancellation of digital subscription once activated.<br/>"
+        "2. Payment received via online payment gateway (Razorpay). No refund of GST on cancellation of digital subscription once activated.<br/>"
         "3. All disputes subject to jurisdiction of the courts in the state of the seller (as stated above)."
     )
     story.append(Paragraph(notes, small))

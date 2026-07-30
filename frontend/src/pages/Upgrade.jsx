@@ -4,8 +4,19 @@ import api from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 import { Check, Sparkles, Ticket, Zap, FileText, ChevronDown, Package, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { load as loadCashfree } from "@cashfreepayments/cashfree-js";
 import { whatsappLink } from "../components/WhatsAppFab";
+
+// Lazily inject Razorpay Checkout.js only when needed.
+function loadRazorpay() {
+  return new Promise((resolve, reject) => {
+    if (window.Razorpay) return resolve(window.Razorpay);
+    const s = document.createElement("script");
+    s.src = "https://checkout.razorpay.com/v1/checkout.js";
+    s.onload = () => resolve(window.Razorpay);
+    s.onerror = () => reject(new Error("Failed to load Razorpay Checkout"));
+    document.body.appendChild(s);
+  });
+}
 
 function computeGst(basePrice, buyerState, sellerState) {
   const base = Number(basePrice) || 0;
@@ -73,31 +84,57 @@ export default function Upgrade() {
         buyer_billing_address: wantsInvoice ? gForm.buyer_billing_address.trim() : null,
         buyer_state: wantsInvoice ? gForm.buyer_state : null,
       };
-      const r = await api.post("/payments/cf/create-order", payload);
-      const cashfree = await loadCashfree({ mode: r.data.env === "production" ? "production" : "sandbox" });
-      const cfResult = await cashfree.checkout({ paymentSessionId: r.data.payment_session_id, redirectTarget: "_modal" });
-      // Cashfree checkout returns an object like {error, order} — surface errors clearly
-      if (cfResult?.error) {
-        const msg = String(cfResult.error?.message || cfResult.error || "");
-        if (/whitelist|not enabled|not approved|broken link/i.test(msg)) {
-          toast.error("This domain isn't whitelisted in Cashfree yet. Ask the admin to whitelist it at merchant.cashfree.com > Developers > Whitelisting.", { duration: 12000 });
-        } else if (/cancel|closed|abort/i.test(msg)) {
-          toast.error("Payment cancelled. Try again when ready.");
-        } else {
-          toast.error(`Cashfree: ${msg}`);
-        }
-        return;
-      }
-      const v = await api.get(`/payments/cf/verify/${r.data.order_id}`);
-      if (v.data.paid) {
-        toast.success("Payment successful — reports added + activation email sent!");
-        await refresh();
-      } else {
-        toast.error(`Payment status: ${v.data.status || "pending"}`);
-      }
+      const r = await api.post("/payments/rzp/create-order", payload);
+      const {
+        order_id, razorpay_order_id, razorpay_key_id, amount_paise, currency, buyer,
+      } = r.data;
+      const Razorpay = await loadRazorpay();
+      const rzp = new Razorpay({
+        key: razorpay_key_id,
+        amount: amount_paise,
+        currency,
+        order_id: razorpay_order_id,
+        name: "Seller Margin",
+        description: "Amazon P&L reconciliation subscription",
+        prefill: { name: buyer.name, email: buyer.email, contact: buyer.phone || "" },
+        theme: { color: "#044535" },
+        modal: {
+          ondismiss: () => {
+            setPayingPlan(null);
+            toast.error("Payment cancelled. Try again when ready.");
+          },
+        },
+        handler: async (res) => {
+          try {
+            const v = await api.post("/payments/rzp/verify", {
+              order_id,
+              razorpay_order_id: res.razorpay_order_id,
+              razorpay_payment_id: res.razorpay_payment_id,
+              razorpay_signature: res.razorpay_signature,
+            });
+            if (v.data.paid) {
+              toast.success("Payment successful — reports added + activation email sent!");
+              await refresh();
+            } else {
+              toast.error(`Payment status: ${v.data.status || "pending"}`);
+            }
+          } catch (e) {
+            toast.error(e?.response?.data?.detail || "Payment verification failed. If money was debited, contact support.");
+          } finally {
+            setPayingPlan(null);
+          }
+        },
+      });
+      rzp.on("payment.failed", (evt) => {
+        setPayingPlan(null);
+        const msg = evt?.error?.description || evt?.error?.reason || "Payment failed";
+        toast.error(`Razorpay: ${msg}`);
+      });
+      rzp.open();
     } catch (e) {
+      setPayingPlan(null);
       toast.error(e?.response?.data?.detail || e?.message || "Payment failed");
-    } finally { setPayingPlan(null); }
+    }
   };
 
   const status = user?.status;

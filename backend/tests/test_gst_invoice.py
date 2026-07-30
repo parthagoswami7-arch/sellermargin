@@ -77,8 +77,8 @@ class TestInvoiceDownloadAuth:
         # order not found returns 404. To test 401, we need a real order id.
         # Insert stub order for this scenario
         oid = "sm_test_authstub_001"
-        db.cf_orders.delete_one({"order_id": oid})
-        db.cf_orders.insert_one({
+        db.orders.delete_one({"order_id": oid})
+        db.orders.insert_one({
             "order_id": oid, "user_id": "test-user-gst",
             "user_email": "user-gst@example.com", "plan": "trial_10",
             "amount": 57.82, "base_amount": 49.0,
@@ -103,8 +103,8 @@ class TestInvoiceDownloadAuth:
 
     def test_valid_token_and_paid_returns_pdf(self):
         oid = "sm_test_authstub_002"
-        db.cf_orders.delete_one({"order_id": oid})
-        db.cf_orders.insert_one({
+        db.orders.delete_one({"order_id": oid})
+        db.orders.insert_one({
             "order_id": oid, "user_id": "test-user-gst",
             "user_email": "user-gst@example.com", "plan": "trial_10",
             "amount": 57.82, "base_amount": 49.0,
@@ -195,7 +195,7 @@ class TestCreateOrderGST:
 
     def test_intra_state_trial(self):
         self._reset_seller_maharashtra()
-        r = requests.post(f"{API}/payments/cf/create-order", headers=user_headers(),
+        r = requests.post(f"{API}/payments/rzp/create-order", headers=user_headers(),
                           json={"plan": "trial_10", "buyer_state": "Maharashtra"}, timeout=30)
         if r.status_code == 502:
             pytest.skip(f"Cashfree sandbox down: {r.text}")
@@ -210,7 +210,7 @@ class TestCreateOrderGST:
         assert ab["intra_state"] is True
 
         # Verify DB stored the gst dict
-        rec = db.cf_orders.find_one({"order_id": body["order_id"]}, {"_id": 0})
+        rec = db.orders.find_one({"order_id": body["order_id"]}, {"_id": 0})
         assert rec is not None
         assert rec["gst"]["intra_state"] is True
         assert rec["gst"]["cgst"] == 4.41
@@ -222,7 +222,7 @@ class TestCreateOrderGST:
             "buyer_name": "Acme LLP", "buyer_gstin": "29ABCDE1234F1Z5",
             "buyer_state": "Karnataka", "buyer_billing_address": "Bangalore 560001",
         }
-        r = requests.post(f"{API}/payments/cf/create-order", headers=user_headers(),
+        r = requests.post(f"{API}/payments/rzp/create-order", headers=user_headers(),
                           json=payload, timeout=30)
         if r.status_code == 502:
             pytest.skip(f"Cashfree sandbox down: {r.text}")
@@ -235,14 +235,14 @@ class TestCreateOrderGST:
         assert ab["total"] == 588.82
         assert ab["intra_state"] is False
 
-        rec = db.cf_orders.find_one({"order_id": r.json()["order_id"]}, {"_id": 0})
+        rec = db.orders.find_one({"order_id": r.json()["order_id"]}, {"_id": 0})
         assert rec["buyer_gstin"] == "29ABCDE1234F1Z5"
         assert rec["buyer_name"] == "Acme LLP"
         assert rec["wants_invoice"] is True
 
     def test_buyer_skips_gst_defaults_intra(self):
         self._reset_seller_maharashtra()
-        r = requests.post(f"{API}/payments/cf/create-order", headers=user_headers(),
+        r = requests.post(f"{API}/payments/rzp/create-order", headers=user_headers(),
                           json={"plan": "trial_10", "wants_invoice": False}, timeout=30)
         if r.status_code == 502:
             pytest.skip(f"Cashfree sandbox down: {r.text}")

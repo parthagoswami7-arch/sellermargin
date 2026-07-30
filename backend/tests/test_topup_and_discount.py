@@ -82,7 +82,7 @@ class TestTopupOrderGST:
 
     def test_topup_intra_state_maharashtra(self):
         self._reset_seller_maharashtra()
-        r = requests.post(f"{API}/payments/cf/create-order", headers=hdr(USER1_TOKEN),
+        r = requests.post(f"{API}/payments/rzp/create-order", headers=hdr(USER1_TOKEN),
                           json={"plan": "topup_5", "buyer_state": "Maharashtra"}, timeout=30)
         if r.status_code == 502:
             pytest.skip(f"Cashfree sandbox down: {r.text}")
@@ -95,7 +95,7 @@ class TestTopupOrderGST:
         assert ab["total"] == 293.82
         assert ab["intra_state"] is True
 
-        rec = db.cf_orders.find_one({"order_id": r.json()["order_id"]}, {"_id": 0})
+        rec = db.orders.find_one({"order_id": r.json()["order_id"]}, {"_id": 0})
         assert rec is not None
         assert rec["plan"] == "topup_5"
         assert rec["base_amount"] == 249.0
@@ -107,7 +107,7 @@ class TestTopupOrderGST:
         payload = {"plan": "topup_5", "buyer_state": "Karnataka",
                    "wants_invoice": True, "buyer_name": "KA Buyer",
                    "buyer_billing_address": "Bangalore"}
-        r = requests.post(f"{API}/payments/cf/create-order", headers=hdr(USER1_TOKEN),
+        r = requests.post(f"{API}/payments/rzp/create-order", headers=hdr(USER1_TOKEN),
                           json=payload, timeout=30)
         if r.status_code == 502:
             pytest.skip(f"Cashfree sandbox down: {r.text}")

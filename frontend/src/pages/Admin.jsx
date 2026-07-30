@@ -17,7 +17,7 @@ export default function Admin() {
   const [states, setStates] = useState([]);
   const [orders, setOrders] = useState([]);
   const [salesSummary, setSalesSummary] = useState(null);
-  const [cfConfig, setCfConfig] = useState(null);
+  const [rzpConfig, setRzpConfig] = useState(null);
 
   // Sales/GSTR date pickers — default to current month
   const now = new Date();
@@ -36,7 +36,7 @@ export default function Admin() {
       api.get("/settings/india-states"),
       api.get("/admin/orders"),
       api.get("/admin/exports/summary"),
-      api.get("/admin/cf-config"),
+      api.get("/admin/rzp-config"),
     ]);
     setStats(s.data);
     setUsers(u.data.users || []);
@@ -46,7 +46,7 @@ export default function Admin() {
     setStates(st.data.states || []);
     setOrders(o.data.orders || []);
     setSalesSummary(sm.data);
-    setCfConfig(cf.data);
+    setRzpConfig(cf.data);
   };
 
   useEffect(() => { loadAll(); }, []);
@@ -169,39 +169,43 @@ export default function Admin() {
         </div>
       )}
 
-      {/* Cashfree production whitelisting reminder */}
-      {cfConfig && cfConfig.cf_env === "production" && (
-        <div className="border-2 border-accent bg-accent/10 p-6 mb-8" data-testid="cf-whitelist-card">
+      {/* Razorpay production setup reminder */}
+      {rzpConfig && rzpConfig.mode === "live" && (
+        <div className="border-2 border-accent bg-accent/10 p-6 mb-8" data-testid="rzp-setup-card">
           <div className="flex items-start gap-4">
             <ShieldAlert size={22} className="text-accent shrink-0 mt-0.5"/>
             <div className="flex-1 min-w-0">
-              <div className="label-caps mb-1">Cashfree production checklist</div>
-              <div className="font-serif text-xl mb-3">Whitelist your domain in Cashfree before accepting real payments</div>
+              <div className="label-caps mb-1">Razorpay live · setup checklist</div>
+              <div className="font-serif text-xl mb-3">
+                {rzpConfig.webhook_configured
+                  ? "Webhook secret is configured — you're ready."
+                  : "Add your Razorpay webhook secret to accept live payments securely"}
+              </div>
               <p className="text-sm text-muted-foreground mb-4">
-                Cashfree production rejects checkout from any domain that isn't explicitly whitelisted (the "Broken Link" error you may have seen). You must add the app's public URL as a whitelisted domain in the Cashfree Merchant Dashboard, otherwise all buyers will hit the same block.
+                Razorpay signs every webhook with an HMAC-SHA256 secret you set on the dashboard. Without it, the backend can't verify webhook authenticity (fulfillment still works via the frontend verify call, but webhooks are the reliable safety net).
               </p>
               <div className="border border-border bg-background p-4 mb-4 font-mono text-xs break-all">
-                Whitelist this: <b>{cfConfig.public_app_url}</b>
+                Webhook URL to paste in Razorpay: <b>{rzpConfig.webhook_url}</b>
               </div>
               <ol className="text-sm text-muted-foreground space-y-1.5 mb-4 list-decimal list-inside">
-                <li>Open <a href={cfConfig.whitelist_url} target="_blank" rel="noreferrer noopener" className="text-primary underline">Cashfree → Developers → Whitelisting</a></li>
-                <li>Click <b>Raise Whitelisting Request</b></li>
-                <li>Paste the URL above (with <code>https://</code>) as your <b>Website URL</b> / <b>Domain</b></li>
-                <li>Submit — Cashfree typically approves within 1 business day for verified merchants</li>
-                <li>Once approved, test a small purchase from the app to confirm it works</li>
+                <li>Open <a href={rzpConfig.webhooks_url} target="_blank" rel="noreferrer noopener" className="text-primary underline">Razorpay Dashboard → Webhooks</a></li>
+                <li>Click <b>+ Add New Webhook</b></li>
+                <li>Paste the URL above, subscribe to at least <code>payment.captured</code></li>
+                <li>Set a strong secret and copy it</li>
+                <li>Add it to backend <code>.env</code> as <code>RAZORPAY_WEBHOOK_SECRET</code> and redeploy</li>
               </ol>
               <div className="flex flex-wrap gap-3">
-                <a href={cfConfig.whitelist_url} target="_blank" rel="noreferrer noopener"
-                  className="btn-emerald text-xs inline-flex items-center gap-2" data-testid="cf-open-whitelist">
-                  Open Cashfree whitelisting <ExternalLink size={12}/>
+                <a href={rzpConfig.webhooks_url} target="_blank" rel="noreferrer noopener"
+                  className="btn-emerald text-xs inline-flex items-center gap-2" data-testid="rzp-open-webhooks">
+                  Open Razorpay webhooks <ExternalLink size={12}/>
                 </a>
-                <a href="https://merchant.cashfree.com/merchants/pg/developers/webhooks" target="_blank" rel="noreferrer noopener"
-                  className="btn-outline text-xs inline-flex items-center gap-2" data-testid="cf-open-webhooks">
-                  Open webhooks page <ExternalLink size={12}/>
+                <a href={rzpConfig.dashboard_url} target="_blank" rel="noreferrer noopener"
+                  className="btn-outline text-xs inline-flex items-center gap-2" data-testid="rzp-open-dashboard">
+                  Open Razorpay dashboard <ExternalLink size={12}/>
                 </a>
               </div>
               <div className="text-[11px] text-muted-foreground mt-4">
-                Also configure webhook: <span className="font-mono">{cfConfig.webhook_url}</span>
+                Mode: <b>{rzpConfig.mode}</b> · Key ID: <span className="font-mono">{rzpConfig.key_id}</span>
               </div>
             </div>
           </div>

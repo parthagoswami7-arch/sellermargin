@@ -253,7 +253,7 @@ def test_redeem_trial_code_adds_one():
 # Cashfree create-order rejects 'agency_starter'
 def test_cf_create_agency_starter_rejected(fresh_user):
     uid, tok = fresh_user
-    r = requests.post(f"{API}/payments/cf/create-order", headers=_hdr(tok),
+    r = requests.post(f"{API}/payments/rzp/create-order", headers=_hdr(tok),
                       json={"plan": "agency_starter"}, timeout=15)
     assert r.status_code == 400
     detail = r.json().get("detail", "").lower()

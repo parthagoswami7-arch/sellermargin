@@ -38,7 +38,7 @@ export default function RefundPolicy() {
             <li>You were charged twice for the same purchase due to a payment processing error.</li>
           </ul>
           <p>
-            To request a refund under these conditions, contact <a href="mailto:support@sellermargin.in" className="text-primary underline">support@sellermargin.in</a> within 7 days of the charge, with your registered email and a description of the issue. Approved refunds are processed to the original payment method within <b>5–7 business days</b> via Cashfree.
+            To request a refund under these conditions, contact <a href="mailto:support@sellermargin.in" className="text-primary underline">support@sellermargin.in</a> within 7 days of the charge, with your registered email and a description of the issue. Approved refunds are processed to the original payment method within <b>5–7 business days</b> via Razorpay.
           </p>
         </Section>
 

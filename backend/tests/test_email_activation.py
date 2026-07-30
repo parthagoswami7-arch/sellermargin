@@ -60,7 +60,7 @@ def _seed_user(email: str, is_admin: bool = False) -> tuple[str, str]:
 def _cleanup_user(uid: str):
     _mongo_eval(f"db.users.deleteMany({{user_id:'{uid}'}});"
                 f"db.user_sessions.deleteMany({{user_id:'{uid}'}});"
-                f"db.cf_orders.deleteMany({{user_id:'{uid}'}});"
+                f"db.orders.deleteMany({{user_id:'{uid}'}});"
                 f"db.activation_codes.deleteMany({{used_by:'{uid}'}});")
 
 
@@ -72,7 +72,7 @@ def _seed_paid_order(uid: str, user_email: str, code_delivered: bool = True,
     if include_email_fields:
         extra_email = "email_sent:false,email_send_id:null,email_error:'old failure',email_last_attempt:new Date(),"
     js = f"""
-      db.cf_orders.insertOne({{
+      db.orders.insertOne({{
         order_id:'{oid}',user_id:'{uid}',user_email:'{user_email}',
         plan:'annual',amount:499.0,base_amount:422.88,
         gst:{{cgst:38.06,sgst:38.06,igst:0,cgst_pct:9,sgst_pct:9,igst_pct:0,total_tax:76.12,intra_state:true}},
@@ -88,7 +88,7 @@ def _seed_paid_order(uid: str, user_email: str, code_delivered: bool = True,
 
 
 def _get_order(oid: str) -> dict:
-    out = _mongo_eval(f"JSON.stringify(db.cf_orders.findOne({{order_id:'{oid}'}}))")
+    out = _mongo_eval(f"JSON.stringify(db.orders.findOne({{order_id:'{oid}'}}))")
     try:
         return json.loads(out) if out and out != "null" else {}
     except Exception:
@@ -114,7 +114,7 @@ def user_ctx():
 # ---------- 1. Code inspection ----------
 def test_payload_includes_contact_email():
     """Static check: send_activation_email builds payload with contact_email."""
-    src = open("/app/backend/cashfree.py").read()
+    src = open("/app/backend/emailer.py").read()
     assert '"contact_email": EMAIL_CONTACT' in src, "contact_email missing from email payload"
     assert 'EMAIL_CONTACT = os.environ.get("EMAIL_CONTACT"' in src
     # returns dict shape
@@ -175,7 +175,7 @@ def test_resend_unfulfilled_order_400(admin_ctx, user_ctx):
         assert r.status_code == 400, r.text
         assert "not fulfilled" in r.text.lower() or "resend" in r.text.lower()
     finally:
-        _mongo_eval(f"db.cf_orders.deleteOne({{order_id:'{oid}'}})")
+        _mongo_eval(f"db.orders.deleteOne({{order_id:'{oid}'}})")
 
 
 def test_resend_fulfilled_order_success_updates_tracking(admin_ctx, user_ctx):
@@ -200,7 +200,7 @@ def test_resend_fulfilled_order_success_updates_tracking(admin_ctx, user_ctx):
         assert after.get("email_sent") is True, f"email_sent not updated: {after}"
         assert "email_last_attempt" in after
     finally:
-        _mongo_eval(f"db.cf_orders.deleteOne({{order_id:'{oid}'}})")
+        _mongo_eval(f"db.orders.deleteOne({{order_id:'{oid}'}})")
 
 
 def test_resend_legacy_order_without_email_sent_field(admin_ctx, user_ctx):
@@ -213,7 +213,7 @@ def test_resend_legacy_order_without_email_sent_field(admin_ctx, user_ctx):
                           headers=admin_ctx["headers"], timeout=45)
         assert r.status_code == 200, r.text
     finally:
-        _mongo_eval(f"db.cf_orders.deleteOne({{order_id:'{oid}'}})")
+        _mongo_eval(f"db.orders.deleteOne({{order_id:'{oid}'}})")
 
 
 def test_admin_orders_lists_email_state(admin_ctx, user_ctx):
@@ -230,4 +230,4 @@ def test_admin_orders_lists_email_state(admin_ctx, user_ctx):
         assert "email_sent" in mine
         assert "email_last_attempt" in mine
     finally:
-        _mongo_eval(f"db.cf_orders.deleteOne({{order_id:'{oid}'}})")
+        _mongo_eval(f"db.orders.deleteOne({{order_id:'{oid}'}})")

@@ -21,7 +21,7 @@ export default function Terms() {
         <p className="text-sm text-muted-foreground mb-10">Effective from 27 February 2026 · Last updated 27 February 2026</p>
 
         <p className="text-[15px] leading-relaxed text-muted-foreground mb-12">
-          These Terms &amp; Conditions ("Terms") govern access to and use of Seller Margin (the "Service"), operated by <b>COMTOP</b> ("we," "us," "our"), available at <span className="font-mono">sellermargin.in</span>. By creating an account or using the Service, you agree to these Terms.
+          These Terms &amp; Conditions ("Terms") govern access to and use of Seller Margin (the "Service"), operated by <b>AHAN S INTERNATIONAL</b> ("we," "us," "our"), available at <span className="font-mono">sellermargin.in</span>. By creating an account or using the Service, you agree to these Terms.
         </p>
 
         <Section n="1" title="What the Service does">
@@ -44,7 +44,7 @@ export default function Terms() {
 
         <Section n="4" title="Payments">
           <p>
-            Payments are processed through <b>Cashfree Payments</b>, a licensed payment aggregator. We do not store your card, UPI, or bank details. All prices are in INR and inclusive of applicable GST, shown at checkout.
+            Payments are processed through <b>Razorpay</b>, a licensed payment aggregator regulated by the Reserve Bank of India. We do not store your card, UPI, or bank details. All prices are in INR and inclusive of applicable GST, shown at checkout.
           </p>
         </Section>
 
@@ -70,7 +70,7 @@ export default function Terms() {
 
         <Section n="8" title="Limitation of liability">
           <p>
-            The Service is provided "as is." To the maximum extent permitted by law, Ahan's International is not liable for indirect, incidental, or consequential damages arising from use of the Service, including decisions made based on generated reports. Our total liability for any claim is limited to the amount you paid for the plan giving rise to the claim.
+            The Service is provided "as is." To the maximum extent permitted by law, AHAN S INTERNATIONAL is not liable for indirect, incidental, or consequential damages arising from use of the Service, including decisions made based on generated reports. Our total liability for any claim is limited to the amount you paid for the plan giving rise to the claim.
           </p>
         </Section>
 
