@@ -9,7 +9,6 @@ from fastapi.responses import StreamingResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from motor.motor_asyncio import AsyncIOMotorClient
-import stripe
 from dotenv import load_dotenv
 
 from parsers import parse_upload, FILE_TYPES
@@ -20,13 +19,10 @@ load_dotenv()
 
 MONGO_URL = os.environ["MONGO_URL"]
 DB_NAME   = os.environ["DB_NAME"]
-STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY", "sk_test_emergent")
 ADMIN_EMAILS = {e.strip().lower() for e in (os.environ.get("ADMIN_EMAILS", "").split(",")) if e.strip()}
 
 client = AsyncIOMotorClient(MONGO_URL)
 db = client[DB_NAME]
-
-stripe.api_key = STRIPE_API_KEY
 
 app = FastAPI(title="Seller Margin — Amazon Monthly P&L Reconciliation")
 api = APIRouter(prefix="/api")
@@ -1139,94 +1135,6 @@ async def admin_put_seller(payload: SellerSettingsReq, _: dict = Depends(require
     )
     return {"ok": True, "seller": await get_seller_settings()}
 
-class CheckoutReq(BaseModel):
-    origin_url: str
-
-@api.post("/payments/checkout")
-async def create_checkout(payload: CheckoutReq, request: Request, user: dict = Depends(current_user)):
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionRequest
-    host_url = str(request.base_url)
-    webhook_url = f"{host_url}api/webhook/stripe"
-    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url=webhook_url)
-    success = f"{payload.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}"
-    cancel  = f"{payload.origin_url}/payment/cancel"
-    req = CheckoutSessionRequest(
-        amount=YEARLY_PACKAGE["amount"],
-        currency=YEARLY_PACKAGE["currency"],
-        success_url=success,
-        cancel_url=cancel,
-        metadata={"user_id": user["user_id"], "package_id": YEARLY_PACKAGE["id"]},
-    )
-    session = await checkout.create_checkout_session(req)
-    await db.payment_transactions.insert_one({
-        "session_id": session.session_id,
-        "user_id": user["user_id"],
-        "package_id": YEARLY_PACKAGE["id"],
-        "amount": YEARLY_PACKAGE["amount"],
-        "currency": YEARLY_PACKAGE["currency"],
-        "status": "initiated",
-        "payment_status": "pending",
-        "created_at": now_utc(),
-        "updated_at": now_utc(),
-    })
-    return {"checkout_url": session.url, "session_id": session.session_id}
-
-async def _mark_user_paid(user_id: str):
-    user = await db.users.find_one({"user_id": user_id}, {"_id": 0})
-    if not user:
-        return
-    new_expiry = _extend_paid_until(user.get("paid_until"), YEARLY_PACKAGE["days"])
-    await db.users.update_one(
-        {"user_id": user_id},
-        {"$set": {"is_paid": True, "paid_until": new_expiry, "last_paid_at": now_utc()},
-         "$inc": {"reports_quota": int(YEARLY_PACKAGE.get("reports_quota") or 0)}},
-    )
-
-@api.get("/payments/status/{session_id}")
-async def payment_status(session_id: str):
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout
-    rec = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
-    if not rec:
-        raise HTTPException(404, "Not found")
-    if rec.get("payment_status") != "paid":
-        try:
-            checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url="")
-            status = await checkout.get_checkout_status(session_id)
-            if status.payment_status == "paid" or status.status == "complete":
-                await db.payment_transactions.update_one(
-                    {"session_id": session_id, "payment_status": {"$ne": "paid"}},
-                    {"$set": {"status": "completed", "payment_status": "paid", "updated_at": now_utc()}},
-                )
-                await _mark_user_paid(rec["user_id"])
-                rec = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
-        except Exception:
-            pass
-    return {"session_id": rec["session_id"], "status": rec["status"], "payment_status": rec["payment_status"]}
-
-@app.post("/api/webhook/stripe")
-async def stripe_webhook(request: Request):
-    from emergentintegrations.payments.stripe.checkout import StripeCheckout
-    body = await request.body()
-    sig = request.headers.get("Stripe-Signature", "")
-    checkout = StripeCheckout(api_key=STRIPE_API_KEY, webhook_url="")
-    try:
-        evt = await checkout.handle_webhook(body, sig)
-    except Exception as e:
-        raise HTTPException(400, f"Webhook error: {e}")
-    if evt.payment_status == "paid" and evt.session_id:
-        rec = await db.payment_transactions.find_one({"session_id": evt.session_id}, {"_id": 0})
-        if rec and rec.get("payment_status") != "paid":
-            await db.payment_transactions.update_one(
-                {"session_id": evt.session_id},
-                {"$set": {"status": "completed", "payment_status": "paid", "updated_at": now_utc()}},
-            )
-            await _mark_user_paid(rec["user_id"])
-    return {"ok": True}
-
-@api.get("/plan")
-async def plan():
-    return {"package": YEARLY_PACKAGE}
-
 # ---------------- admin ----------------
 @api.get("/admin/stats")
 async def admin_stats(_: dict = Depends(require_admin)):
@@ -1234,27 +1142,22 @@ async def admin_stats(_: dict = Depends(require_admin)):
     paid_users = await db.users.count_documents({"is_paid": True})
     trial_users = total_users - paid_users
     total_reports = await db.reports.count_documents({})
-    revenue_cursor = db.payment_transactions.find({"payment_status": "paid"}, {"_id": 0, "amount": 1, "currency": 1})
+    revenue_cursor = db.cf_orders.find({"status": "PAID"}, {"_id": 0, "amount": 1})
     revenue = 0.0
     async for r in revenue_cursor:
-        revenue += float(r.get("amount", 0))
+        revenue += float(r.get("amount", 0) or 0)
     return {
         "total_users": total_users,
         "paid_users": paid_users,
         "trial_users": trial_users,
         "total_reports": total_reports,
-        "revenue_usd": round(revenue, 2),
+        "revenue_inr": round(revenue, 2),
     }
 
 @api.get("/admin/users")
 async def admin_users(_: dict = Depends(require_admin)):
     users = await db.users.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=1000)
     return {"users": users}
-
-@api.get("/admin/payments")
-async def admin_payments(_: dict = Depends(require_admin)):
-    docs = await db.payment_transactions.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=500)
-    return {"payments": docs}
 
 # ---------------- setup ----------------
 app.include_router(api)
@@ -1277,4 +1180,3 @@ async def indexes():
     await db.reports.create_index([("user_id", 1), ("target_month", 1), ("target_year", 1)])
     await db.reports.create_index("report_id", unique=True)
     await db.cost_prices.create_index([("user_id", 1), ("sku", 1)], unique=True)
-    await db.payment_transactions.create_index("session_id", unique=True)

@@ -16,7 +16,6 @@ import Upgrade from "@/pages/Upgrade";
 import ContactUs from "@/pages/ContactUs";
 import Terms from "@/pages/Terms";
 import RefundPolicy from "@/pages/RefundPolicy";
-import { PaymentSuccess, PaymentCancel } from "@/pages/PaymentResult";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AppShell from "@/components/AppShell";
 
@@ -44,8 +43,6 @@ function AppRouter() {
       <Route path="/contact" element={<ContactUs />} />
       <Route path="/terms" element={<Terms />} />
       <Route path="/refunds" element={<RefundPolicy />} />
-      <Route path="/payment/success" element={<PaymentSuccess />} />
-      <Route path="/payment/cancel" element={<PaymentCancel />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
