@@ -157,12 +157,12 @@ export default function Upgrade() {
   const topupGst  = topup  ? computeGst(topup.price_inr,  gForm.buyer_state, seller.state) : null;
 
   return (
-    <div className="p-10 max-w-6xl">
+    <div className="p-4 sm:p-6 md:p-10 max-w-6xl">
       <div className="label-caps mb-2">Activation</div>
-      <h1 className="font-serif text-5xl tracking-tight mb-4">
+      <h1 className="font-serif text-3xl sm:text-4xl md:text-5xl tracking-tight mb-4">
         {paidActive ? "Extend your access" : "Unlock Seller Margin"}
       </h1>
-      <p className="text-muted-foreground mb-10 max-w-2xl">
+      <p className="text-sm sm:text-base text-muted-foreground mb-8 md:mb-10 max-w-2xl">
         Pay online via UPI / card / netbanking. You get instant access, a GST tax invoice, and an activation code emailed to you.
       </p>
 
@@ -311,7 +311,7 @@ function PlanCard({ title, primary, plan, gst, payingPlan, onBuy, testid }) {
   const savings = hasDiscount ? plan.list_price_inr - plan.price_inr : 0;
 
   return (
-    <div className={`p-10 relative ${primary ? "bg-primary text-primary-foreground" : "bg-card border-b md:border-b-0 md:border-r border-border"}`}>
+    <div className={`p-6 sm:p-8 md:p-10 relative ${primary ? "bg-primary text-primary-foreground" : "bg-card border-b md:border-b-0 md:border-r border-border"}`}>
       {hasDiscount && (
         <div className="absolute top-3 right-3 bg-accent text-accent-foreground text-[10px] uppercase tracking-[0.15em] font-bold px-2 py-1" data-testid={`fomo-${plan.id}`}>
           Save ₹{savings}
@@ -319,13 +319,13 @@ function PlanCard({ title, primary, plan, gst, payingPlan, onBuy, testid }) {
       )}
       <div className={`label-caps mb-4 ${primary ? "opacity-80" : ""}`}>{title}</div>
       <div className="flex items-baseline gap-3 mb-1 flex-wrap">
-        <div className="font-serif text-5xl">₹{plan.price_inr}</div>
+        <div className="font-serif text-4xl sm:text-5xl">₹{plan.price_inr}</div>
         {hasDiscount && (
-          <div className={`text-xl line-through font-serif ${primary ? "opacity-60" : "text-muted-foreground"}`} data-testid={`strike-${plan.id}`}>
+          <div className={`text-lg sm:text-xl line-through font-serif ${primary ? "opacity-60" : "text-muted-foreground"}`} data-testid={`strike-${plan.id}`}>
             ₹{plan.list_price_inr}
           </div>
         )}
-        <div className={`text-sm ${primary ? "opacity-70" : "text-muted-foreground"}`}>+ 18% GST</div>
+        <div className={`text-xs sm:text-sm ${primary ? "opacity-70" : "text-muted-foreground"}`}>+ 18% GST</div>
       </div>
       <div className={`text-xs mb-1 ${primary ? "opacity-70" : "text-muted-foreground"}`}>
         for {plan.days} days
@@ -377,12 +377,12 @@ function PlanCard({ title, primary, plan, gst, payingPlan, onBuy, testid }) {
 function AgencyComingSoonCard({ plan }) {
   const total = +(plan.price_inr * 1.18).toFixed(2);
   return (
-    <div className="p-10 bg-card relative" data-testid="agency-card">
+    <div className="p-6 sm:p-8 md:p-10 bg-card relative" data-testid="agency-card">
       <div className="absolute top-3 right-3 bg-accent text-accent-foreground text-[10px] uppercase tracking-[0.15em] font-bold px-2 py-1">Coming soon</div>
       <div className="label-caps mb-4">{plan.label}</div>
-      <div className="flex items-baseline gap-2 mb-1">
-        <div className="font-serif text-5xl">₹{plan.price_inr.toLocaleString("en-IN")}</div>
-        <div className="text-sm text-muted-foreground">+ 18% GST</div>
+      <div className="flex items-baseline gap-2 mb-1 flex-wrap">
+        <div className="font-serif text-4xl sm:text-5xl">₹{plan.price_inr.toLocaleString("en-IN")}</div>
+        <div className="text-xs sm:text-sm text-muted-foreground">+ 18% GST</div>
       </div>
       <div className="text-xs mb-4 text-muted-foreground">≈ ₹{total.toLocaleString("en-IN")} all-in · about ₹{Math.round(plan.price_inr / plan.reports_quota)}/report</div>
       <div className="flex items-center gap-2 mb-6 px-3 py-2 text-sm border border-border bg-muted/40">
