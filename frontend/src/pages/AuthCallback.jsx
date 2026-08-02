@@ -22,7 +22,7 @@ export default function AuthCallback() {
       try {
         const res = await api.post("/auth/session", { session_id });
         await refresh();
-        navigate("/dashboard", { replace: true, state: { user: res.data } });
+        navigate("/", { replace: true, state: { user: res.data } });
       } catch (e) {
         navigate("/?auth_error=1", { replace: true });
       }

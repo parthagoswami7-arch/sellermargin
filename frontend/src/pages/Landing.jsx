@@ -6,7 +6,7 @@ import WhatsAppFab, { whatsappLink } from "../components/WhatsAppFab";
 
 // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
 function loginWithGoogle() {
-  const redirectUrl = window.location.origin + "/dashboard";
+  const redirectUrl = window.location.origin + "/";
   window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirectUrl)}`;
 }
 
