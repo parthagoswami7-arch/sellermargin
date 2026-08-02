@@ -35,6 +35,22 @@ function firePixelInitiateCheckout({ amount, currency, plan }) {
   } catch (_) { /* never block UX on pixel */ }
 }
 
+function firePixelAddPaymentInfo() {
+  try {
+    if (typeof window.fbq === "function") {
+      window.fbq("track", "AddPaymentInfo");
+    }
+  } catch (_) { /* never block UX on pixel */ }
+}
+
+function firePixelViewContent({ content_category = "pricing" } = {}) {
+  try {
+    if (typeof window.fbq === "function") {
+      window.fbq("track", "ViewContent", { content_category });
+    }
+  } catch (_) { /* never block UX on pixel */ }
+}
+
 // Lazily inject Razorpay Checkout.js only when needed.
 function loadRazorpay() {
   return new Promise((resolve, reject) => {
@@ -82,6 +98,8 @@ export default function Upgrade() {
     api.get("/plans").then(r => { setPlans(r.data.plans || {}); setUpcoming(r.data.upcoming_plans || {}); });
     api.get("/settings/seller").then(r => setSeller(r.data.seller || {})).catch(() => {});
     api.get("/settings/india-states").then(r => setStates(r.data.states || [])).catch(() => {});
+    // Meta ViewContent — page-level intent signal for the pricing page.
+    firePixelViewContent({ content_category: "pricing" });
   }, []);
 
   // Recover the browser Meta Pixel Purchase event on redirect/reload flows —
@@ -275,7 +293,14 @@ export default function Upgrade() {
 
       {/* GST invoice details (optional) */}
       <div className="border border-border bg-card mb-10" data-testid="gst-section">
-        <button onClick={() => setWantsInvoice(v => !v)} data-testid="gst-toggle"
+        <button onClick={() => {
+          setWantsInvoice(v => {
+            const next = !v;
+            // AddPaymentInfo when buyer opts into providing billing details
+            if (next) firePixelAddPaymentInfo();
+            return next;
+          });
+        }} data-testid="gst-toggle"
           className="w-full flex items-center gap-4 px-6 py-5 text-left hover:bg-muted/40 transition-colors">
           <div className={`w-6 h-6 border-2 flex items-center justify-center shrink-0 transition-colors ${wantsInvoice ? "bg-primary border-primary" : "border-border"}`}>
             {wantsInvoice && <Check size={14} className="text-primary-foreground" strokeWidth={3}/>}
