@@ -873,6 +873,26 @@ async def rzp_verify(payload: RzpVerifyReq, user: dict = Depends(current_user)):
     return await _fulfill_order_if_paid(payload.order_id)
 
 
+@api.get("/payments/rzp/order/{order_id}")
+async def rzp_order_status(order_id: str, user: dict = Depends(current_user)):
+    """Lightweight status probe used by the frontend to fire the Meta Pixel Purchase
+    event on redirect/return flows where the Razorpay checkout `handler` didn't run
+    (mobile UPI intent, in-app browsers, tab close, etc.)."""
+    rec = await db.orders.find_one(
+        {"order_id": order_id, "user_id": user["user_id"]}, {"_id": 0})
+    if not rec:
+        raise HTTPException(404, "Order not found")
+    return {
+        "order_id": order_id,
+        "paid": bool(rec.get("code_delivered")),
+        "status": rec.get("status"),
+        "amount": float(rec.get("amount") or 0),
+        "currency": rec.get("currency", "INR"),
+        "event_id": rec.get("meta_event_id") or f"purchase_{order_id}",
+        "plan": rec.get("plan"),
+    }
+
+
 @app.post("/api/webhook/razorpay")
 async def rzp_webhook(request: Request):
     """Razorpay webhook. Always returns 200 so the dashboard 'Test' passes.

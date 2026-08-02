@@ -6,6 +6,35 @@ import { Check, Sparkles, Ticket, Zap, FileText, ChevronDown, Package, Plus } fr
 import { toast } from "sonner";
 import { whatsappLink } from "../components/WhatsAppFab";
 
+// Fires the Meta Pixel Purchase event once per browser session for a given order.
+// Idempotent via localStorage flag; Meta itself dedupes with the server CAPI on event_id.
+function firePixelPurchase({ event_id, amount, currency }) {
+  if (!event_id) return;
+  try {
+    const firedKey = `sm_pixel_fired_${event_id}`;
+    if (localStorage.getItem(firedKey)) return;
+    if (typeof window.fbq === "function") {
+      window.fbq("track", "Purchase", {
+        value: Number(amount || 0),
+        currency: currency || "INR",
+      }, { eventID: event_id });
+    }
+    localStorage.setItem(firedKey, String(Date.now()));
+  } catch (_) { /* never block UX on pixel */ }
+}
+
+function firePixelInitiateCheckout({ amount, currency, plan }) {
+  try {
+    if (typeof window.fbq === "function") {
+      window.fbq("track", "InitiateCheckout", {
+        value: Number(amount || 0),
+        currency: currency || "INR",
+        content_ids: plan ? [plan] : undefined,
+      });
+    }
+  } catch (_) { /* never block UX on pixel */ }
+}
+
 // Lazily inject Razorpay Checkout.js only when needed.
 function loadRazorpay() {
   return new Promise((resolve, reject) => {
@@ -55,6 +84,41 @@ export default function Upgrade() {
     api.get("/settings/india-states").then(r => setStates(r.data.states || [])).catch(() => {});
   }, []);
 
+  // Recover the browser Meta Pixel Purchase event on redirect/reload flows —
+  // covers mobile UPI intent, in-app browsers, and users who close the tab
+  // before Razorpay's `handler` fires. Runs on mount + whenever auth status
+  // changes (e.g. after Razorpay redirects back and the user session rehydrates).
+  useEffect(() => {
+    let cancelled = false;
+    const raw = (() => { try { return localStorage.getItem("sm_pending_order"); } catch { return null; }})();
+    if (!raw) return;
+    let pending;
+    try { pending = JSON.parse(raw); } catch { pending = null; }
+    if (!pending?.order_id) { try { localStorage.removeItem("sm_pending_order"); } catch {} ; return; }
+    // Expire pending orders older than 60 minutes — Meta drops far-past events anyway
+    if (pending.ts && (Date.now() - pending.ts > 60 * 60 * 1000)) {
+      try { localStorage.removeItem("sm_pending_order"); } catch {}
+      return;
+    }
+    (async () => {
+      try {
+        const r = await api.get(`/payments/rzp/order/${pending.order_id}`);
+        if (cancelled) return;
+        if (r.data.paid) {
+          firePixelPurchase({
+            event_id: r.data.event_id,
+            amount:   r.data.amount,
+            currency: r.data.currency,
+          });
+          try { localStorage.removeItem("sm_pending_order"); } catch {}
+          toast.success("Payment confirmed — reports added.");
+          await refresh();
+        }
+      } catch (_) { /* silent — user is on the page anyway, they'll retry naturally */ }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.email, user?.status?.reports_quota]);
+
   const redeem = async () => {
     const clean = (code || "").trim().toUpperCase();
     if (!clean) return toast.error("Enter your activation code");
@@ -87,7 +151,21 @@ export default function Upgrade() {
       const r = await api.post("/payments/rzp/create-order", payload);
       const {
         order_id, razorpay_order_id, razorpay_key_id, amount_paise, currency, buyer,
+        amount_breakdown,
       } = r.data;
+      // Persist so we can recover pixel firing on redirect/reload flows
+      // (mobile UPI intent, in-app browsers, closed tabs, etc.)
+      try {
+        localStorage.setItem("sm_pending_order", JSON.stringify({
+          order_id, plan: planId, amount: amount_breakdown?.total || (amount_paise / 100),
+          currency, ts: Date.now(),
+        }));
+      } catch (_) {}
+      // Meta InitiateCheckout — mid-funnel signal Meta uses to build its Purchase lookalike model
+      firePixelInitiateCheckout({
+        amount: amount_breakdown?.total || (amount_paise / 100),
+        currency, plan: planId,
+      });
       const Razorpay = await loadRazorpay();
       const rzp = new Razorpay({
         key: razorpay_key_id,
@@ -113,15 +191,14 @@ export default function Upgrade() {
               razorpay_signature: res.razorpay_signature,
             });
             if (v.data.paid) {
-              // Meta Pixel Purchase event — same event_id as server-side CAPI so Meta dedupes
-              try {
-                if (window.fbq && v.data.event_id) {
-                  window.fbq("track", "Purchase", {
-                    value: Number(v.data.amount || 0),
-                    currency: v.data.currency || "INR",
-                  }, { eventID: v.data.event_id });
-                }
-              } catch (_) { /* pixel failures must never block the success UX */ }
+              // Meta Pixel Purchase event — same event_id as server-side CAPI so Meta dedupes.
+              // Also written to localStorage so a reload/redirect return won't refire it.
+              firePixelPurchase({
+                event_id:  v.data.event_id,
+                amount:    v.data.amount,
+                currency:  v.data.currency,
+              });
+              try { localStorage.removeItem("sm_pending_order"); } catch (_) {}
               toast.success("Payment successful — reports added + activation email sent!");
               await refresh();
             } else {
