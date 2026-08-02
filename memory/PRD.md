@@ -8,22 +8,27 @@ SaaS web app for monthly P&L reconciliation for Amazon India sellers. Ingests 5 
 - Admin email: `ahansinternationalkolkata@gmail.com`
 
 ## Architecture
-- Frontend: React + Tailwind + Shadcn UI + Sonner + Razorpay Checkout.js
-- Backend: FastAPI + Motor (MongoDB) + Pandas + ReportLab
-- Payments: **Razorpay** (live) — replaced Cashfree entirely on 2026-02-27
+- Frontend: React + Tailwind + Shadcn UI + Sonner + Razorpay Checkout.js + Meta Pixel
+- Backend: FastAPI + Motor (MongoDB) + Pandas + ReportLab + Meta Conversions API
+- Payments: **Razorpay live** — replaced Cashfree entirely on 2026-02-27
 - Emails: Emergent-managed Resend proxy
 - Auth: Emergent-managed Google OAuth
 - Hosted on Emergent; production domain `sellermargin.in`
 
-## Payment integration (Razorpay)
-- Env vars: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`
-- Backend helpers: `/app/backend/razorpay_pay.py`
-- Endpoints:
-  - `POST /api/payments/rzp/create-order` — creates Razorpay order, records in Mongo
-  - `POST /api/payments/rzp/verify` — verifies checkout HMAC signature, fulfills
-  - `POST /api/webhook/razorpay` — verifies X-Razorpay-Signature (HMAC-SHA256), fulfills
-- Fulfillment gated by `razorpay.order.fetch` — payment must be `paid` before code/quota/email issued.
-- Collection: `db.orders` (renamed from `cf_orders`).
+## Payments (Razorpay)
+- Env: `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`
+- Backend helper: `/app/backend/razorpay_pay.py`
+- Endpoints: `POST /api/payments/rzp/create-order`, `POST /api/payments/rzp/verify`, `POST /api/webhook/razorpay`
+- Fulfillment gated by `razorpay.order.fetch` (status == "paid") + atomic `code_delivered` flag → idempotent between webhook and verify polling.
+- Collection: `db.orders`
+
+## Meta Pixel + Conversions API
+- Env: `META_PIXEL_ID`, `META_ACCESS_TOKEN` (backend), `REACT_APP_META_PIXEL_ID` (frontend)
+- Browser: base Pixel + PageView in `/app/frontend/public/index.html`. Purchase event fired in `Upgrade.jsx` after verify returns paid.
+- Server: `/app/backend/meta_capi.py` sends `Purchase` server-side after fulfillment inside `_fulfill_order_if_paid`.
+- **Dedup**: `event_id = purchase_<order_id>` — same value on both browser Pixel event and CAPI event, so Meta counts the purchase once.
+- SHA256-hashed email is passed as `user_data.em` for match quality.
+- CAPI status stored on order: `meta_capi_sent`, `meta_capi_error`, `meta_capi_fbtrace`.
 
 ## Plans
 - `trial_10` — ₹49 for 7 days, 1 report
@@ -32,7 +37,8 @@ SaaS web app for monthly P&L reconciliation for Amazon India sellers. Ingests 5 
 - `agency_starter` — coming soon (WhatsApp CTA)
 
 ## Implemented (session-by-session highlights)
-- 2026-02: **Removed Cashfree, integrated Razorpay end-to-end** (backend + frontend + admin)
+- 2026-02: **Meta Pixel base + Purchase browser event + server-side Conversions API with dedup via event_id + SHA256 email hashing** — verified live (events_received=1)
+- 2026-02: **Cashfree → Razorpay swap** end-to-end (backend + frontend + admin)
 - 2026-02: Removed unused Stripe scaffolding entirely
 - 2026-02: Company name → AHAN S INTERNATIONAL on Terms, Contact, Refunds
 - 2026-02: GST (18%) at checkout, PDF Tax Invoice, GSTR-1 export, Sales CSV, admin resend email
@@ -40,12 +46,12 @@ SaaS web app for monthly P&L reconciliation for Amazon India sellers. Ingests 5 
 - 2026-02: Live at `sellermargin.in`
 
 ## Priority backlog
-- **P0** — Get Razorpay Webhook Secret from user, add to `.env`, redeploy prod
 - **P0** — Multi-month comparison chart on Dashboard
 - **P1** — SKU cost bulk-import via CSV
 - **P1** — Email finalized P&L report to user's inbox on report completion
 - **P1** — Verify sender domain `sellermargin.in` with Emergent Email to fix spam deliverability
-- **P2** — UTM attribution on landing (`utm_source` tracking)
+- **P2** — UTM attribution on landing (`utm_source`, tie back into orders for ROAS)
+- **P2** — Additional Meta events: InitiateCheckout on Upgrade page load, AddPaymentInfo when checkout modal opens
 
 ## Refactor backlog
-- Split `server.py` (1200+ lines) → `admin_routes.py`, `payment_routes.py`, `report_routes.py`
+- Split `server.py` (1250+ lines) → `admin_routes.py`, `payment_routes.py`, `report_routes.py`

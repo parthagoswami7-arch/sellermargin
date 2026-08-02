@@ -113,6 +113,15 @@ export default function Upgrade() {
               razorpay_signature: res.razorpay_signature,
             });
             if (v.data.paid) {
+              // Meta Pixel Purchase event — same event_id as server-side CAPI so Meta dedupes
+              try {
+                if (window.fbq && v.data.event_id) {
+                  window.fbq("track", "Purchase", {
+                    value: Number(v.data.amount || 0),
+                    currency: v.data.currency || "INR",
+                  }, { eventID: v.data.event_id });
+                }
+              } catch (_) { /* pixel failures must never block the success UX */ }
               toast.success("Payment successful — reports added + activation email sent!");
               await refresh();
             } else {

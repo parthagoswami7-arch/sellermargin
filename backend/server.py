@@ -642,6 +642,7 @@ from razorpay_pay import (create_order as rzp_create_order,
                           verify_webhook_signature as rzp_verify_webhook,
                           RAZORPAY_KEY_ID)
 from emailer import send_activation_email
+from meta_capi import send_purchase as meta_send_purchase
 from invoice import (SELLER_DEFAULTS, STATE_CODES, compute_gst, build_invoice_number,
                      render_invoice_pdf)
 from pymongo import ReturnDocument, UpdateOne
@@ -817,12 +818,33 @@ async def _fulfill_order_if_paid(order_id: str) -> dict:
             "email_error":    email_result.get("error"),
             "email_last_attempt": now_utc(),
         }})
+    # Meta CAPI Purchase event — same event_id as browser Pixel for dedup.
+    meta_event_id = f"purchase_{order_id}"
+    meta_result = await meta_send_purchase(
+        event_id=meta_event_id,
+        value=float(gst_total),
+        email=rec.get("user_email"),
+        event_source_url=(f"{PUBLIC_APP_URL}/upgrade" if PUBLIC_APP_URL else None),
+        currency=rec.get("currency", "INR"),
+    )
+    await db.orders.update_one({"order_id": order_id},
+        {"$set": {
+            "meta_event_id":       meta_event_id,
+            "meta_capi_sent":      bool(meta_result.get("ok")),
+            "meta_capi_error":     meta_result.get("error"),
+            "meta_capi_fbtrace":   meta_result.get("fbtrace_id"),
+            "meta_capi_at":        now_utc(),
+        }})
+
     return {"status": "PAID", "code": code, "paid": True,
             "paid_until": (new_expiry.isoformat() if new_expiry else None),
             "invoice_no": invoice_no, "invoice_url": invoice_url,
             "reports_added": int(plan.get("reports_quota") or 0),
             "is_topup": bool(plan.get("is_topup")),
-            "email_sent": bool(email_result.get("ok"))}
+            "email_sent": bool(email_result.get("ok")),
+            "amount": float(gst_total),
+            "currency": rec.get("currency", "INR"),
+            "event_id": meta_event_id}
 
 
 class RzpVerifyReq(BaseModel):
