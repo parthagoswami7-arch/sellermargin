@@ -157,7 +157,7 @@ def export_pdf(report: dict) -> bytes:
         ["Inbound fee",          money(s["inbound_fee"])],
         ["Storage fee",          money(s["storage_fee"])],
         ["Removal fee",          money(s["removal_fee"])],
-        ["Ad spend",             money(s["ad_spend"])],
+        ["Ad spend (incl. 18% GST)", money(s["ad_spend"])],
         ["Total Item Price",     money(s["total_item_price"])],
         ["ACOS %",               f"{s['acos_pct']:.2f}%"],
         ["Profit % (revenue)",   f"{s['profit_pct']:.2f}%"],

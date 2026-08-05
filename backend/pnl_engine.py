@@ -293,7 +293,11 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     # Amazon stores these as negative totals; flip sign to positive expense.
     # (kept for compatibility — recomputed above with widened column matching)
 
-    ad_total    = sum(_num(col(a, "Spend", "spend")) for a in ad_spend)
+    # Sponsored Products spend is reported net of GST by Amazon Ads.
+    # Amazon invoices 18% GST on ad spend separately, so uplift by 1.18 to get
+    # the true cash outflow that hits the seller's P&L.
+    ad_total_ex_gst = sum(_num(col(a, "Spend", "spend")) for a in ad_spend)
+    ad_total        = round(ad_total_ex_gst * 1.18, 2)
 
     total_received  = total_payment + reimbursement
     total_deduction = total_cogs + inbound_fee + storage_fee + removal_fee + ad_total

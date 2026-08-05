@@ -37,7 +37,7 @@ export default function ReportView() {
     { name: "Inbound fee", value: Math.abs(s.inbound_fee) },
     { name: "Storage fee", value: Math.abs(s.storage_fee) },
     { name: "Removal fee", value: s.removal_fee },
-    { name: "Ad spend", value: s.ad_spend },
+    { name: "Ad spend (incl. GST)", value: s.ad_spend },
   ].filter(d => d.value > 0);
 
   const cmpData = [
@@ -95,7 +95,7 @@ export default function ReportView() {
           ["Settlement", money(s.settlement), null, null],
           ["Reimbursement", money(s.reimbursement), null, null],
           ["COGS", money(s.cogs), null, null],
-          ["Ad spend", money(s.ad_spend), null, null],
+          ["Ad spend (incl. 18% GST)", money(s.ad_spend), null, null],
         ].map(([k,v,sub,tid], i) => (
           <div key={k} className={`p-6 ${i < 4 ? "md:border-r border-border" : ""} border-b md:border-b-0 border-border`}>
             <div className="label-caps mb-2">{k}</div>
