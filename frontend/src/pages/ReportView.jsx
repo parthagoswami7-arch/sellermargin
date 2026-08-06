@@ -113,7 +113,7 @@ export default function ReportView() {
           ["Removal fee", money(s.removal_fee)],
           ["Inbound fee", money(s.inbound_fee)],
           ["Storage fee", money(s.storage_fee)],
-          ["ACOS %", `${s.acos_pct.toFixed(2)}%`],
+          ["TACoS %", `${s.acos_pct.toFixed(2)}%`],
           ["Customer Return %", `${(s.customer_return_pct ?? s.return_pct ?? 0).toFixed(2)}%`],
         ].map(([k,v], i) => (
           <div key={k} className={`p-6 ${i < 4 ? "md:border-r border-border" : ""} border-t border-border`}>

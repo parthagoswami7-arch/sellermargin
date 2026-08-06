@@ -134,7 +134,7 @@ export default function Landing() {
                 <span className="text-3xl font-serif text-primary">₹ 4,34,472.70</span>
               </div>
               <div className="flex gap-4 text-xs text-muted-foreground uppercase tracking-[0.15em] pt-2">
-                <div>ACOS 6.60%</div>
+                <div>TACoS 6.60%</div>
                 <div>Profit% 63.4%</div>
                 <div>Return% 3.1%</div>
               </div>
