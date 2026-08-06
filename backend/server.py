@@ -458,6 +458,50 @@ async def set_return_overrides(rid: str, items: list[ReturnOverride], user: dict
     )
     return {"ok": True, "updated": len(items)}
 
+class ExtrasPayload(BaseModel):
+    packing_cost_per_easyship: Optional[float] = 0
+    total_inbound_packing_cost: Optional[float] = 0
+    misc_cost: Optional[float] = 0
+
+
+@api.post("/reports/{rid}/extras")
+async def set_report_extras(rid: str, payload: ExtrasPayload, user: dict = Depends(current_user)):
+    """Store operator-entered monthly extras (packing per Easy Ship order, inbound packing total, misc)
+    on this report. These are per-report (not per-user), so they reset for each new month naturally."""
+    await _get_report(rid, user)  # authorization
+    extras = {
+        "packing_cost_per_easyship":  float(payload.packing_cost_per_easyship or 0),
+        "total_inbound_packing_cost": float(payload.total_inbound_packing_cost or 0),
+        "misc_cost":                  float(payload.misc_cost or 0),
+    }
+    await db.reports.update_one({"report_id": rid},
+        {"$set": {"extras": extras, "updated_at": now_utc()}})
+    return {"ok": True, "extras": extras}
+
+
+@api.get("/reports/{rid}/counts")
+async def get_report_counts(rid: str, user: dict = Depends(current_user)):
+    """Return the two operator-facing counts for the extras panel:
+    - easyship_orders_count = orders with fulfillment-channel == Merchant/MFN in target month
+    - inbound_shipments_count = Payment lines with description 'FBA Inbound Pickup Service' in target month
+    Cheap: runs compute_summary with zero extras and returns just the counts + saved extras."""
+    r = await _get_report(rid, user)
+    raw = r.get("raw") or {}
+    rows = r.get("rows") or []
+    if not rows:
+        return {"easyship_orders_count": 0, "inbound_shipments_count": 0, "extras": r.get("extras") or {}}
+    s = compute_summary(
+        rows=rows, payment=raw.get("payment", []), fba_removal=raw.get("fba_removal", []),
+        ad_spend=raw.get("ad_spend", []), target_month=r["target_month"], target_year=r["target_year"],
+        orders=raw.get("orders", []), extras={},
+    )
+    return {
+        "easyship_orders_count":  s["easyship_orders_count"],
+        "inbound_shipments_count": s["inbound_shipments_count"],
+        "extras": r.get("extras") or {},
+    }
+
+
 @api.post("/reports/{rid}/finalize")
 async def finalize_report(rid: str, user: dict = Depends(current_user)):
     r = await _get_report(rid, user)
@@ -472,6 +516,8 @@ async def finalize_report(rid: str, user: dict = Depends(current_user)):
         ad_spend=raw.get("ad_spend", []),
         target_month=r["target_month"],
         target_year=r["target_year"],
+        orders=raw.get("orders", []),
+        extras=r.get("extras") or {},
     )
     await db.reports.update_one(
         {"report_id": rid},

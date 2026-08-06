@@ -128,8 +128,18 @@ def unique_skus_needing_cost(rows: list[dict]) -> list[dict]:
 
 
 def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dict],
-                    ad_spend: list[dict], target_month: int, target_year: int) -> dict[str, Any]:
-    """Replicate the summary formulas from the Excel workbook."""
+                    ad_spend: list[dict], target_month: int, target_year: int,
+                    orders: list[dict] | None = None,
+                    extras: dict | None = None) -> dict[str, Any]:
+    """Replicate the summary formulas from the Excel workbook.
+
+    `extras` (optional) accepts operator-entered monthly costs:
+      • packing_cost_per_easyship   — ₹ per Merchant-fulfilled order (multiplied by the count)
+      • total_inbound_packing_cost  — ₹ total for the month (added as-is)
+      • misc_cost                   — ₹ total, added as-is; resets per-report so it never carries over
+    """
+    orders = orders or []
+    extras = extras or {}
 
     # Effective unit cost = override if set, else default
     def eff_cost(r):
@@ -299,8 +309,64 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
     ad_total_ex_gst = sum(_num(col(a, "Spend", "spend")) for a in ad_spend)
     ad_total        = round(ad_total_ex_gst * 1.18, 2)
 
+    # --- Operator-entered monthly extras ------------------------------------
+    # Count of Merchant-fulfilled orders (Easy Ship) for the target month —
+    # from the All Orders / MTR report. Amazon uses either "Merchant" or "MFN"
+    # in the fulfillment-channel column depending on the report variant.
+    _ORDER_DATE_HEADERS = ("purchase-date", "Purchase Date", "purchase date", "Order Date", "order-date", "Invoice Date", "invoice date")
+    _FC_HEADERS         = ("fulfillment-channel", "Fulfillment Channel", "fulfillment channel", "Channel", "sales-channel", "Sales Channel")
+    def _order_date(o):
+        d = parse_date_any(col(o, *_ORDER_DATE_HEADERS))
+        if d is None:
+            for k, v in o.items():
+                if not k: continue
+                kl = k.strip().lower()
+                if ("date" in kl) and v:
+                    d = parse_date_any(v)
+                    if d is not None: break
+        if d is None:
+            return None
+        if d.tz is None:
+            d = d.tz_localize("UTC")
+        return d
+
+    start = pd.Timestamp(year=target_year, month=target_month, day=1, tz="UTC")
+    if target_month == 12:
+        end = pd.Timestamp(year=target_year + 1, month=1, day=1, tz="UTC")
+    else:
+        end = pd.Timestamp(year=target_year, month=target_month + 1, day=1, tz="UTC")
+
+    easyship_orders_count = 0
+    for o in orders:
+        fc = str(col(o, *_FC_HEADERS) or "").strip().lower()
+        if fc not in ("merchant", "mfn"):
+            continue
+        d = _order_date(o)
+        if d is None:
+            continue
+        if start <= d < end:
+            easyship_orders_count += 1
+
+    # Count of Payment lines whose description is exactly "FBA Inbound Pickup Service"
+    # for the target month — reference only, not used in the calculation.
+    inbound_shipments_count = 0
+    for p in month_txns:
+        desc = _pay_desc(p).strip().lower()
+        if desc == "fba inbound pickup service":
+            inbound_shipments_count += 1
+
+    packing_per_easyship_raw   = float(extras.get("packing_cost_per_easyship") or 0)
+    total_inbound_packing_raw  = float(extras.get("total_inbound_packing_cost") or 0)
+    misc_cost_raw              = float(extras.get("misc_cost") or 0)
+
+    packing_cost_easyship = round(packing_per_easyship_raw * easyship_orders_count, 2)
+    packing_cost_inbound  = round(total_inbound_packing_raw, 2)
+    misc_cost             = round(misc_cost_raw, 2)
+    extras_total          = round(packing_cost_easyship + packing_cost_inbound + misc_cost, 2)
+
     total_received  = total_payment + reimbursement
-    total_deduction = total_cogs + inbound_fee + storage_fee + removal_fee + ad_total
+    total_deduction = (total_cogs + inbound_fee + storage_fee + removal_fee + ad_total
+                       + packing_cost_easyship + packing_cost_inbound + misc_cost)
     final_profit    = total_received - total_deduction
 
     import math
@@ -362,6 +428,13 @@ def compute_summary(rows: list[dict], payment: list[dict], fba_removal: list[dic
         "storage_fee": round(clean(storage_fee), 2),
         "removal_fee": round(clean(removal_fee), 2),
         "ad_spend": round(clean(ad_total), 2),
+        "packing_cost_easyship":     packing_cost_easyship,
+        "packing_cost_easyship_rate": round(packing_per_easyship_raw, 2),
+        "packing_cost_inbound":      packing_cost_inbound,
+        "misc_cost":                 misc_cost,
+        "extras_total":              extras_total,
+        "easyship_orders_count":     int(easyship_orders_count),
+        "inbound_shipments_count":   int(inbound_shipments_count),
         "total_deduction": round(clean(total_deduction), 2),
         "final_profit": round(clean(final_profit), 2),
         "acos_pct": round(acos_pct, 2),

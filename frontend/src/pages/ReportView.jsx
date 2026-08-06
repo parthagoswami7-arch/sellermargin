@@ -38,6 +38,9 @@ export default function ReportView() {
     { name: "Storage fee", value: Math.abs(s.storage_fee) },
     { name: "Removal fee", value: s.removal_fee },
     { name: "Ad spend (incl. GST)", value: s.ad_spend },
+    { name: "Packing (Easy Ship)", value: s.packing_cost_easyship || 0 },
+    { name: "Packing (Inbound)",   value: s.packing_cost_inbound || 0 },
+    { name: "Misc cost",           value: s.misc_cost || 0 },
   ].filter(d => d.value > 0);
 
   const cmpData = [
@@ -96,6 +99,9 @@ export default function ReportView() {
           ["Reimbursement", money(s.reimbursement), null, null],
           ["COGS", money(s.cogs), null, null],
           ["Ad spend (incl. 18% GST)", money(s.ad_spend), null, null],
+          [`Packing — Easy Ship (${s.easyship_orders_count || 0} × ₹${(s.packing_cost_easyship_rate || 0).toFixed(2)})`, money(s.packing_cost_easyship || 0), null, null],
+          ["Packing — Inbound shipments", money(s.packing_cost_inbound || 0), null, null],
+          ["Miscellaneous cost", money(s.misc_cost || 0), null, null],
         ].map(([k,v,sub,tid], i) => (
           <div key={k} className={`p-6 ${i < 4 ? "md:border-r border-border" : ""} border-b md:border-b-0 border-border`}>
             <div className="label-caps mb-2">{k}</div>
